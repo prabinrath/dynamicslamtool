@@ -11,12 +11,12 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
-#include <pcl/features/normal_3d.h>
 #include <visualization_msgs/Marker.h>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/vfh.h>
 #include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <flann/flann.h>
 #include <iostream>
 #include <dtw/dtw.h>

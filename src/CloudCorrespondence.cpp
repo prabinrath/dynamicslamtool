@@ -4,20 +4,16 @@ pcl::search::KdTree<pcl::PointXYZI>::Ptr CloudCorrespondence::tree = boost::shar
 
 void CloudCorrespondence::filterPassThrough(float x,float y,float z)
 {
-	pcl::PointCloud<pcl::PointXYZI>::Ptr cff(new pcl::PointCloud<pcl::PointXYZI>);
-	cff = cloud;
 	pcl::PassThrough<pcl::PointXYZI> pass;
-  	pass.setInputCloud(cff);
+  	pass.setInputCloud(cloud);
   	pass.setFilterFieldName("x");
   	pass.setFilterLimits(-x, x);
   	pass.filter(*cloud);
-  	cff = cloud;
-  	pass.setInputCloud(cff);
+  	pass.setInputCloud(cloud);
   	pass.setFilterFieldName("y");
   	pass.setFilterLimits(-y, y);
   	pass.filter(*cloud);
-  	cff = cloud;
-  	pass.setInputCloud(cff);
+  	pass.setInputCloud(cloud);
   	pass.setFilterFieldName("z");
   	pass.setFilterLimits(-0.5, z);
   	pass.filter(*cloud);
@@ -58,7 +54,7 @@ void CloudCorrespondence::removePlaneSurface(float distance_threshold)
 
 void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 {
-	vfh_bank.clear();
+	feature_bank.clear();
 	clusters.clear();
 	cluster_indices.clear();
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
@@ -87,10 +83,11 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	    cloud_cluster->is_dense = true;
 
 	    clusters.push_back(cloud_cluster);
-	    ////////////////////////////////////////////// Feature Extraction : Viewpoint Feature Histogram
+	    /*///////////////////////////////////////////// Feature Extraction : Viewpoint Feature Histogram
 	  	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
 	  	pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::Normal> norm_est;
-  		norm_est.setKSearch(10);	//K nearest neighbours, radius search can also be used
+  		//norm_est.setKSearch(10);	//K nearest neighbours, radius search can also be used
+  		norm_est.setRadiusSearch(0.1);
 	  	norm_est.setInputCloud(cloud_cluster);
 	  	norm_est.compute(*normals);
 
@@ -111,8 +108,14 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	  	{
 	  		vec.push_back(vfhs->points[0].histogram[i]);
 	  	}
-	  	///////////////////////////////////////////////////////////////////////
-		vfh_bank.push_back(vec);
+	  	/*//////////////////////////////////////////////////////////////////////
+
+	    Eigen::Vector4f centroid;
+	    pcl::compute3DCentroid(*cloud_cluster, centroid);
+	    vector<double> vec;
+	    vec.push_back(centroid[0]);vec.push_back(centroid[1]);vec.push_back(centroid[2]);
+
+		feature_bank.push_back(vec);
   	}
 
   	cluster_collection->width = cluster_collection->points.size();
@@ -120,9 +123,77 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	cluster_collection->is_dense = true;
 }
 
+void CloudCorrespondenceMethods::swap_check_correspondence_centroidKdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+{
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cldp(new pcl::PointCloud<pcl::PointXYZ>());
+
+	for(int i=0;i<fp.size();i++)
+	{
+		pcl::PointXYZ pt;
+		pt.x = fp[i][0];
+		pt.y = fp[i][1];
+		pt.z = fp[i][2];
+		cldp->points.push_back(pt);
+	} 
+
+	pcl::KdTreeFLANN<pcl::PointXYZ,flann::ChiSquareDistance<float>>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::PointXYZ>);
+	kdtree->setInputCloud(cldp);
+
+	for(int i=0;i<fc.size();i++)
+	{
+		pcl::PointXYZ pt;
+		pt.x = fc[i][0];
+		pt.y = fc[i][1];
+		pt.z = fc[i][2];
+
+		int K = 1;
+		std::vector<int> pointIdxNKNSearch(K);
+		std::vector<float> pointNKNSquaredDistance(K);
+
+		if(kdtree->nearestKSearch(pt, K, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
+  		{
+  			if(pointNKNSquaredDistance[0]<delta)
+  			{
+	  			if(mp.find(pointIdxNKNSearch[0]) == mp.end())
+	  			{
+	  				mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
+	  			}
+	  			else
+	  			{
+	  				if(mp[pointIdxNKNSearch[0]].second>pointNKNSquaredDistance[0])
+	  				{
+	  					mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
+	  				}
+	  			}
+  			}
+  		}		
+	}
+}
+
+void CloudCorrespondenceMethods::calculate_correspondence_centroidKdtree(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta)
+{
+	cout<<fp.size()<<" Centroid "<<fc.size()<<endl;
+	map<int,pair<int,double>> m1,m2;
+
+	swap_check_correspondence_centroidKdtree(fp,fc,m1,delta);
+	swap_check_correspondence_centroidKdtree(fc,fp,m2,delta);
+
+	for(map<int,pair<int,double>>::iterator it1 = m1.begin();it1!=m1.end();it1++)
+	{
+		map<int,pair<int,double>>::iterator fnd = m2.find(it1->second.first);
+		if(fnd != m2.end())
+		{
+			if(fnd->second.first == it1->first)
+			{
+				mp[it1->first] = {it1->second.first,min(it1->second.second,fnd->second.second)};
+			}
+		}
+	}
+}
+
 void CloudCorrespondenceMethods::calculate_correspondence_dtw(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
 {
-	cout<<fp.size()<<" "<<fc.size()<<endl;
+	cout<<fp.size()<<" DTW "<<fc.size()<<endl;
 	for(int i=0;i<fc.size();i++)
 	{
 		LB_Improved filter(fc[i], fc[i].size() / 10);
@@ -154,7 +225,7 @@ void CloudCorrespondenceMethods::calculate_correspondence_dtw(vector<vector<doub
 	}	
 }
 
-void CloudCorrespondenceMethods::swap_check_correspondence(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+void CloudCorrespondenceMethods::swap_check_correspondence_VFHkdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
 {
 	pcl::PointCloud<pcl::VFHSignature308>::Ptr cldp(new pcl::PointCloud<pcl::VFHSignature308>());
 	for(int i=0;i<fp.size();i++)
@@ -167,7 +238,7 @@ void CloudCorrespondenceMethods::swap_check_correspondence(vector<vector<double>
 		cldp->points.push_back(pt);
 	}
 	
-	pcl::KdTreeFLANN<pcl::VFHSignature308>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::VFHSignature308>);
+	pcl::KdTreeFLANN<pcl::VFHSignature308,flann::ChiSquareDistance<float>>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::VFHSignature308>);
 	kdtree->setInputCloud(cldp);
 
 	for(int i=0;i<fc.size();i++)
@@ -202,13 +273,13 @@ void CloudCorrespondenceMethods::swap_check_correspondence(vector<vector<double>
 	}
 }
 
-void CloudCorrespondenceMethods::calculate_correspondence_kdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+void CloudCorrespondenceMethods::calculate_correspondence_VFHkdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
 {
-	cout<<fp.size()<<" "<<fc.size()<<endl;
+	cout<<fp.size()<<" KdTree "<<fc.size()<<endl;
 	map<int,pair<int,double>> m1,m2;
 
-	swap_check_correspondence(fp,fc,m1,delta);
-	swap_check_correspondence(fc,fp,m2,delta);
+	swap_check_correspondence_VFHkdtree(fp,fc,m1,delta);
+	swap_check_correspondence_VFHkdtree(fc,fp,m2,delta);
 
 	for(map<int,pair<int,double>>::iterator it1 = m1.begin();it1!=m1.end();it1++)
 	{
@@ -268,6 +339,6 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5;
 
-  marker.lifetime = ros::Duration(1);
+  marker.lifetime = ros::Duration(3);
   return marker;
 }

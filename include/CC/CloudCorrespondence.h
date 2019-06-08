@@ -4,7 +4,7 @@ struct CloudCorrespondence
 {
 	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,cluster_collection;
 	std::vector<pcl::PointIndices> cluster_indices;
-	std::vector<vector<double>> vfh_bank;
+	std::vector<vector<double>> feature_bank;
 	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
 	static pcl::search::KdTree<pcl::PointXYZI>::Ptr tree;
 	bool init;
@@ -22,8 +22,10 @@ struct CloudCorrespondence
 
 class CloudCorrespondenceMethods
 {
-	void swap_check_correspondence(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta);
+	void swap_check_correspondence_VFHkdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta);
+	void swap_check_correspondence_centroidKdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta);
 	public:
 		void calculate_correspondence_dtw(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta);
-		void calculate_correspondence_kdtree(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta);
+		void calculate_correspondence_VFHkdtree(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta);
+		void calculate_correspondence_centroidKdtree(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta);
 };

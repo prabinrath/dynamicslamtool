@@ -30,7 +30,7 @@ void euclidian_clustering(const sensor_msgs::PointCloud2ConstPtr &input)
 		pub.publish(output);
   		
 	  	map<int,pair<int,double>> mp;
-	  	mth->calculate_correspondence_kdtree(ca->vfh_bank,cb->vfh_bank,mp,400); //400:kdtree,120:dtw
+	  	mth->calculate_correspondence_centroidKdtree(ca->feature_bank,cb->feature_bank,mp,0.5); //80:kdtree_chi^2,120:dtw
 	  	float r,g,b;int id = 1;
 	  	for(map<int,pair<int,double>>::iterator it=mp.begin();it!=mp.end();it++)
 		{
