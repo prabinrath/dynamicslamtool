@@ -6,16 +6,23 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
   roscpp
+  genmsg
   sensor_msgs
+  nav_msgs
+  message_filters
   visualization_msgs
+  tf
 )
+
+add_message_files(FILES pc_odom.msg)
+generate_messages(DEPENDENCIES sensor_msgs nav_msgs)
 
 #find_package(PCL 1.7 REQUIRED)
 #include_directories(${PCL_INCLUDE_DIRS})
 #link_directories(${PCL_LIBRARY_DIRS})
 #add_definitions(${PCL_DEFINITIONS})
 
-catkin_package()
+catkin_package(CATKIN_DEPENDS message_runtime)
 
 ###########
 ## Build ##
@@ -31,6 +38,13 @@ target_link_libraries(getpc ${catkin_LIBRARIES}) #${PCL_LIBRARIES}
 
 add_executable(cluster src/clustering_test.cpp)
 target_link_libraries(cluster cluster_correspondence)
+
+add_executable(pack src/make_packet.cpp)
+target_link_libraries(pack ${catkin_LIBRARIES})
+add_dependencies(pack test_work_generate_messages_cpp)
+
+add_executable(trans src/transform_test.cpp)
+target_link_libraries(trans ${catkin_LIBRARIES})
 
 add_executable(chk src/check_corres.cpp include/dtw/dtw.h)
 target_link_libraries(chk ${catkin_LIBRARIES})
