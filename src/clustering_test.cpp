@@ -49,9 +49,9 @@ int main (int argc, char** argv)
   srand((unsigned)time(0));
   ros::init (argc, argv, "test_pcl");
   ros::NodeHandle nh;
-  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 1, euclidian_clustering);
-  pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 1);
-  marker_pub = nh.advertise<visualization_msgs::Marker>("bbox", 1);
+  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 10, euclidian_clustering);
+  pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 10);
+  marker_pub = nh.advertise<visualization_msgs::Marker>("bbox", 10);
   ca.reset(new CloudCorrespondence());
   cb.reset(new CloudCorrespondence());
   mth.reset(new CloudCorrespondenceMethods());

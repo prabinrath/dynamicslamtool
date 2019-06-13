@@ -20,7 +20,7 @@ void pack_data(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::Od
   cout<<input->header.stamp<<" "<<odm->header.stamp<<" "<<msg.header.stamp<<endl;
   msg.cloud = *input;
   msg.odom = *odm;
-
+  msg.cloud.header.frame_id = "/current";
   pub.publish(msg);
 }
 
