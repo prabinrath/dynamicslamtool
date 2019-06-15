@@ -2,6 +2,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl/ModelCoefficients.h>
 //#include <pcl/visualization/histogram_visualizer.h>
+#include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>

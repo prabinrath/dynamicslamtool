@@ -294,6 +294,48 @@ void CloudCorrespondenceMethods::calculate_correspondence_VFHkdtree(vector<vecto
 	}
 }
 
+double getDifference(vector<double> c1,vector<double> c2)
+{
+	return sqrt(pow(c1[0]-c2[0],2)+pow(c1[1]-c2[1],2)+pow(c1[2]-c2[2],2));
+}
+
+vector<double> getDisplacementVector(vector<vector<double>> &f1,vector<vector<double>> &f2, map<int,pair<int,double>> &mp)
+{
+	vector<double> disp;
+	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
+	{
+		double max_disp = 0;
+		for(map<int,pair<int,double>>::iterator tt=mp.begin();tt!=mp.end();tt++)
+		{
+			max_disp+=abs(getDifference(f1[cc->first],f1[tt->first])-getDifference(f2[cc->second.first],f2[tt->second.first]));
+		}
+		disp.push_back(max_disp);
+	}
+	return disp;
+}
+
+vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
+{
+	vector<long> changed;
+	srand((unsigned int)time(NULL));
+	float resolution = 0.1f;
+	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
+	{
+		long max_change = 0;
+		pcl::octree::OctreePointCloudChangeDetector<pcl::PointXYZI> octree_cd(resolution);
+		octree_cd.setInputCloud(c1[cc->first]);
+		octree_cd.addPointsFromInputCloud();
+		octree_cd.switchBuffers();
+		octree_cd.setInputCloud(c2[cc->second.first]);
+		octree_cd.addPointsFromInputCloud();
+		
+		std::vector<int> newPointIdxVector;
+		octree_cd.getPointIndicesFromNewVoxels(newPointIdxVector);
+		changed.push_back(newPointIdxVector.size());
+	}
+	return changed;
+}
+
 visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
 {
   Eigen::Vector4f centroid;
