@@ -59,9 +59,10 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	cluster_indices.clear();
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
 	
+	//Needs change
   	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
   	ec.setClusterTolerance(distance_threshold);
-  	ec.setMinClusterSize(150);
+  	ec.setMinClusterSize(400);
   	ec.setMaxClusterSize(25000);
   	tree->setInputCloud(cloud);
   	ec.setSearchMethod(tree);
@@ -81,6 +82,12 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	    cloud_cluster->width = cloud_cluster->points.size ();
 	    cloud_cluster->height = 1;
 	    cloud_cluster->is_dense = true;
+
+	    pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
+	    sor.setInputCloud(cloud_cluster);
+	    sor.setMeanK(50);
+	    sor.setStddevMulThresh(0.8);
+	    sor.filter(*cloud_cluster);
 
 	    clusters.push_back(cloud_cluster);
 	    /*///////////////////////////////////////////// Feature Extraction : Viewpoint Feature Histogram
@@ -314,11 +321,10 @@ vector<double> getDisplacementVector(vector<vector<double>> &f1,vector<vector<do
 	return disp;
 }
 
-vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
+vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp,float resolution = 0.3f)
 {
 	vector<long> changed;
 	srand((unsigned int)time(NULL));
-	float resolution = 0.1f;
 	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
 	{
 		long max_change = 0;
@@ -334,6 +340,50 @@ vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointX
 		changed.push_back(newPointIdxVector.size());
 	}
 	return changed;
+}
+
+vector<double> getVFHValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
+{
+	vector<double> vfh_values;
+	pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::Normal> norm_est;
+	pcl::VFHEstimation<pcl::PointXYZI, pcl::Normal, pcl::VFHSignature308> vfh;
+	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
+	{
+		pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
+	  	pcl::search::KdTree<pcl::PointXYZI>::Ptr _tree(new pcl::search::KdTree<pcl::PointXYZI>());
+  		//norm_est.setKSearch(10);	//K nearest neighbours, radius search can also be used
+  		norm_est.setRadiusSearch(0.1);
+	  	
+	  	norm_est.setInputCloud(c1[cc->first]);
+	  	norm_est.compute(*normals);
+
+	  	vfh.setInputCloud(c1[cc->first]);
+	  	vfh.setInputNormals(normals);
+	  	vfh.setSearchMethod(_tree);
+	  	pcl::PointCloud<pcl::VFHSignature308>::Ptr vfhs1(new pcl::PointCloud<pcl::VFHSignature308>());
+	  	vfh.compute(*vfhs1);
+
+	  	normals.reset(new pcl::PointCloud<pcl::Normal>());
+	  	_tree.reset(new pcl::search::KdTree<pcl::PointXYZI>());
+
+	  	norm_est.setInputCloud(c2[cc->second.first]);
+	  	norm_est.compute(*normals);
+
+	  	vfh.setInputCloud(c2[cc->second.first]);
+	  	vfh.setInputNormals(normals);
+	  	vfh.setSearchMethod(_tree);
+	  	pcl::PointCloud<pcl::VFHSignature308>::Ptr vfhs2(new pcl::PointCloud<pcl::VFHSignature308>());
+	  	vfh.compute(*vfhs2);
+	  	vector<double> v1,v2;
+	  	for(int i=0;i<308;i++)
+	  	{
+	  		v1.push_back(vfhs1->points[0].histogram[i]);
+	  		v2.push_back(vfhs2->points[0].histogram[i]);
+	  	}
+	  	LB_Improved filter(v1, v1.size() / 10);
+		vfh_values.push_back(filter.test(v2));
+	}
+	return vfh_values;
 }
 
 visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
@@ -383,4 +433,36 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
 
   marker.lifetime = ros::Duration(3);
   return marker;
+}
+
+tf::Transform getTransformFromPose(tf::Pose &p1,tf::Pose &p2)
+{
+  tf::Transform t;
+  double roll1, pitch1, yaw1, roll2, pitch2, yaw2;
+  float linearposx1,linearposy1,linearposz1,linearposx2,linearposy2,linearposz2;
+  boost::shared_ptr<tf::Quaternion> qtn;
+  tf::Matrix3x3 mat;
+
+  linearposx1 = p1.getOrigin().getX();
+  linearposy1 = p1.getOrigin().getY();
+  linearposz1 = p1.getOrigin().getZ();
+  qtn.reset(new tf::Quaternion(p1.getRotation().getX(), p1.getRotation().getY(), p1.getRotation().getZ(), p1.getRotation().getW()));
+  mat.setRotation(*qtn);
+  mat.getRPY(roll1, pitch1, yaw1);
+
+  linearposx2 = p2.getOrigin().getX();
+  linearposy2 = p2.getOrigin().getY();
+  linearposz2 = p2.getOrigin().getZ();
+  qtn.reset(new tf::Quaternion(p2.getRotation().getX(), p2.getRotation().getY(), p2.getRotation().getZ(), p2.getRotation().getW()));
+  mat.setRotation(*qtn);
+  mat.getRPY(roll2, pitch2, yaw2);
+
+  qtn->setRPY(roll1-roll2,pitch1-pitch2,yaw1-yaw2);
+  tf::Vector3 v(linearposx1-linearposx2,linearposy1-linearposy2,linearposz1-linearposz2);
+  t.setOrigin(v);
+  t.setRotation(*qtn);
+  //Eigen::Matrix4f m;
+  //pcl_ros::transformAsMatrix(t,m);
+  //cout<<m<<endl<<endl;
+  return t;
 }

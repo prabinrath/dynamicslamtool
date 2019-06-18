@@ -3,6 +3,7 @@
 #include <pcl/ModelCoefficients.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/sample_consensus/method_types.h>
@@ -84,6 +85,25 @@ void voxel_filter(const sensor_msgs::PointCloud2ConstPtr& input)
 	pub.publish(output);
 }
 
+void statistical_outlier_removal(const sensor_msgs::PointCloud2ConstPtr& input)
+{
+    sensor_msgs::PointCloud2 output;
+    pcl::PCLPointCloud2 *cloud = new pcl::PCLPointCloud2,cloud_filtered;
+    pcl_conversions::toPCL(*input, *cloud);
+    pcl::fromPCLPointCloud2(*cloud, *ca);
+
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
+    sor.setInputCloud(ca);
+    sor.setMeanK(100);
+    sor.setStddevMulThresh(0.8);
+    sor.filter(*cb);  
+    
+    pcl::toPCLPointCloud2(*cb,*cloud);
+    pcl_conversions::fromPCL(*cloud, output);
+    output.header.frame_id = "/test";
+    pub.publish(output);
+}
+
 void pass_through(const sensor_msgs::PointCloud2ConstPtr &input)
 {
     sensor_msgs::PointCloud2 output;
@@ -160,7 +180,7 @@ int main (int argc, char** argv)
 {
   ros::init (argc, argv, "test_pcl");
   ros::NodeHandle nh;
-  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 1, voxel_filter);
+  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 1, statistical_outlier_removal);
   pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 1);
   ca.reset(new pcl::PointCloud<pcl::PointXYZI>);
   cb.reset(new pcl::PointCloud<pcl::PointXYZI>);

@@ -7,6 +7,7 @@ struct CloudCorrespondence
 	std::vector<vector<double>> feature_bank;
 	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
 	static pcl::search::KdTree<pcl::PointXYZI>::Ptr tree;
+	tf::Pose ps;
 	bool init;
 
 	CloudCorrespondence()
