@@ -52,6 +52,11 @@ void CloudCorrespondence::removePlaneSurface(float distance_threshold)
 	}
 }
 
+bool cluster_condition(const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
+{
+  return true;
+}
+
 void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 {
 	feature_bank.clear();
@@ -60,14 +65,22 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
 	
 	//Needs change
-  	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+  	/*pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
   	ec.setClusterTolerance(distance_threshold);
   	ec.setMinClusterSize(400);
   	ec.setMaxClusterSize(25000);
   	tree->setInputCloud(cloud);
   	ec.setSearchMethod(tree);
   	ec.setInputCloud(cloud);
-  	ec.extract(cluster_indices);
+  	ec.extract(cluster_indices);*/
+
+	pcl::ConditionalEuclideanClustering<pcl::PointXYZI> cec;
+  	cec.setInputCloud(cloud);
+  	cec.setConditionFunction(&cluster_condition);
+  	cec.setClusterTolerance(distance_threshold);
+  	cec.setMinClusterSize(400);
+  	cec.setMaxClusterSize(25000);
+  	cec.segment(cluster_indices);
 
   	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   	{
