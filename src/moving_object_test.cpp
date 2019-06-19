@@ -3,7 +3,7 @@ extern visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::
 extern vector<double> getDisplacementVector(vector<vector<double>> &f1,vector<vector<double>> &f2, map<int,pair<int,double>> &mp);
 extern vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp,float resolution = 0.3f);
 extern tf::Transform getTransformFromPose(tf::Pose &p1,tf::Pose &p2);
-extern vector<double> getVFHValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp);
+extern vector<double> getFDValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp);
 
 ros::Publisher pub,marker_pub;
 boost::shared_ptr<CloudCorrespondence> ca,cb;
@@ -39,15 +39,16 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 		pub.publish(output);
   		
 	  	map<int,pair<int,double>> mp;
-	  	mth->calculate_correspondence_centroidKdtree(ca->feature_bank,cb->feature_bank,mp,0.5); //80:kdtree_chi^2,120:dtw
+	  	mth->calculate_correspondence_centroidKdtree(ca->feature_bank,cb->feature_bank,mp,0.1); //80:kdtree_chi^2,120:dtw
+	  	//mth->calculate_correspondence_ESFkdtree(ca->clusters,cb->clusters,mp,0.05);
 	  	//vector<double> param_vec = getDisplacementVector(ca->feature_bank,cb->feature_bank,mp);
-	  	vector<double> param_vec = getVFHValuesVector(ca->clusters,cb->clusters,mp);
+	  	vector<double> param_vec = getFDValuesVector(ca->clusters,cb->clusters,mp);
 	  	//vector<long> param_vec = getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.3);
 	  	float rs=0.4,gs=0.6,bs=0.8,rd=0.8,gd=0.1,bd=0.4;int id = 1;
 	  	for(map<int,pair<int,double>>::iterator it=mp.begin();it!=mp.end();it++)
 		{
 			cout<<"{"<<it->second.first<<"->"<<it->first<<"} Fit Score: "<<it->second.second<<" Moving_Score: "<<param_vec[id-1]<<endl;
-			if(param_vec[id-1]>100)
+			if(param_vec[id-1]>0.1)
 			{
 				marker_pub.publish(mark_cluster(ca->clusters[it->first],id,"previous","bounding_box",rd,gd,bd));
 				marker_pub.publish(mark_cluster(cb->clusters[it->second.first],id,"current","bounding_box",rd,gd,bd));

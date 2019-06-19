@@ -16,7 +16,7 @@ void euclidian_clustering(const sensor_msgs::PointCloud2ConstPtr &input)
   	cb.reset(new CloudCorrespondence());
   	pcl::fromPCLPointCloud2(*cloud, *(cb->cloud));
 	cb->filterPassThrough(5.0,5.0,5.0);
-	cb->computeClusters(0.08,"single_cluster");
+	cb->computeClusters(0.1,"single_cluster");
 	cb->init = true;
 	if(ca->init  == true && cb->init == true)
 	{
@@ -30,7 +30,8 @@ void euclidian_clustering(const sensor_msgs::PointCloud2ConstPtr &input)
 		pub.publish(output);
   		
 	  	map<int,pair<int,double>> mp;
-	  	mth->calculate_correspondence_centroidKdtree(ca->feature_bank,cb->feature_bank,mp,0.5); //80:kdtree_chi^2,120:dtw
+	  	//mth->calculate_correspondence_ESFkdtree(ca->clusters,cb->clusters,mp,0.5); //80:kdtree_chi^2,120:dtw
+	  	mth->calculate_correspondence_centroidKdtree(ca->feature_bank,cb->feature_bank,mp,0.1);
 	  	float r,g,b;int id = 1;
 	  	for(map<int,pair<int,double>>::iterator it=mp.begin();it!=mp.end();it++)
 		{

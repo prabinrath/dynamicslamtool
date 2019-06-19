@@ -4,7 +4,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <nav_msgs/Odometry.h>
 #include <pcl/ModelCoefficients.h>
-//#include <pcl/visualization/histogram_visualizer.h>
+#include <pcl/visualization/histogram_visualizer.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/sample_consensus/method_types.h>
@@ -19,7 +19,7 @@
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/Marker.h>
 #include <pcl/features/normal_3d_omp.h>
-#include <pcl/features/vfh.h>
+#include <pcl/features/esf.h>
 #include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

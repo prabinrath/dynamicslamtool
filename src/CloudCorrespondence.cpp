@@ -1,6 +1,6 @@
 #include "CC/CloudCorrespondence.h"
 
-pcl::search::KdTree<pcl::PointXYZI>::Ptr CloudCorrespondence::tree = boost::shared_ptr<pcl::search::KdTree<pcl::PointXYZI>>(new pcl::search::KdTree<pcl::PointXYZI>);
+pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr CloudCorrespondence::tree = boost::shared_ptr<pcl::KdTreeFLANN<pcl::PointXYZI>>(new pcl::KdTreeFLANN<pcl::PointXYZI>);
 
 void CloudCorrespondence::filterPassThrough(float x,float y,float z)
 {
@@ -52,9 +52,17 @@ void CloudCorrespondence::removePlaneSurface(float distance_threshold)
 	}
 }
 
-bool cluster_condition(const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
+bool CloudCorrespondence::cluster_condition(const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
 {
-  return true;
+	//very slow and useless
+  	std::vector<int> pointIdxRadiusSearch;
+  	std::vector<float> pointRadiusSquaredDistance;
+  	if ( tree->radiusSearch(point_b, 0.3, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
+  	{
+  		if(pointIdxRadiusSearch.size()>5)
+  			return true;
+  	}
+  	return false;
 }
 
 void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
@@ -64,24 +72,22 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	cluster_indices.clear();
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
 	
-	//Needs change
-  	/*pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+  	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
   	ec.setClusterTolerance(distance_threshold);
-  	ec.setMinClusterSize(400);
-  	ec.setMaxClusterSize(25000);
-  	tree->setInputCloud(cloud);
-  	ec.setSearchMethod(tree);
+  	ec.setMinClusterSize(200);
+  	ec.setMaxClusterSize(35000);
   	ec.setInputCloud(cloud);
-  	ec.extract(cluster_indices);*/
-
+  	ec.extract(cluster_indices);
+	/*
 	pcl::ConditionalEuclideanClustering<pcl::PointXYZI> cec;
+	tree->setInputCloud(cloud);
   	cec.setInputCloud(cloud);
-  	cec.setConditionFunction(&cluster_condition);
+  	cec.setConditionFunction(&CloudCorrespondence::cluster_condition);
   	cec.setClusterTolerance(distance_threshold);
   	cec.setMinClusterSize(400);
   	cec.setMaxClusterSize(25000);
   	cec.segment(cluster_indices);
-
+	*/
   	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   	{
   		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>);
@@ -98,7 +104,7 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 
 	    pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
 	    sor.setInputCloud(cloud_cluster);
-	    sor.setMeanK(50);
+	    sor.setMeanK(100);
 	    sor.setStddevMulThresh(0.8);
 	    sor.filter(*cloud_cluster);
 
@@ -245,38 +251,33 @@ void CloudCorrespondenceMethods::calculate_correspondence_dtw(vector<vector<doub
 	}	
 }
 
-void CloudCorrespondenceMethods::swap_check_correspondence_VFHkdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+void CloudCorrespondenceMethods::swap_check_correspondence_ESFkdtree(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp, double delta)
 {
-	pcl::PointCloud<pcl::VFHSignature308>::Ptr cldp(new pcl::PointCloud<pcl::VFHSignature308>());
-	for(int i=0;i<fp.size();i++)
+	pcl::PointCloud<pcl::ESFSignature640>::Ptr temp(new pcl::PointCloud<pcl::ESFSignature640>),cldp(new pcl::PointCloud<pcl::ESFSignature640>);
+	pcl::ESFEstimation<pcl::PointXYZI, pcl::ESFSignature640> esf;
+	for(int i=0;i<c1.size();i++)
 	{
-		pcl::VFHSignature308 pt;
-		for(int j=0;j<fp[i].size();j++)
-		{
-			pt.histogram[j] = fp[i][j];
-		}
-		cldp->points.push_back(pt);
+		esf.setInputCloud(c1[i]);
+		esf.compute(*temp);
+		cldp->points.push_back(temp->points[0]);
 	}
 	
-	pcl::KdTreeFLANN<pcl::VFHSignature308,flann::ChiSquareDistance<float>>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::VFHSignature308>);
+	pcl::KdTreeFLANN<pcl::ESFSignature640/*,flann::ChiSquareDistance<float>*/>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::ESFSignature640>);
 	kdtree->setInputCloud(cldp);
 
-	for(int i=0;i<fc.size();i++)
+	for(int i=0;i<c2.size();i++)
 	{
-		pcl::VFHSignature308 pt;
-		for(int j=0;j<fc[i].size();j++)
-		{
-			pt.histogram[j] = fc[i][j];
-		}
+		esf.setInputCloud(c2[i]);
+		esf.compute(*temp);
 
 		int K = 1;
 		std::vector<int> pointIdxNKNSearch(K);
 		std::vector<float> pointNKNSquaredDistance(K);
 
-		if(kdtree->nearestKSearch(pt, K, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
+		if(kdtree->nearestKSearch(temp->points[0], K, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
   		{
-  			if(pointNKNSquaredDistance[0]<delta)
-  			{
+  			//if(pointNKNSquaredDistance[0]<delta)
+  			//{
 	  			if(mp.find(pointIdxNKNSearch[0]) == mp.end())
 	  			{
 	  				mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
@@ -288,18 +289,18 @@ void CloudCorrespondenceMethods::swap_check_correspondence_VFHkdtree(vector<vect
 	  					mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
 	  				}
 	  			}
-  			}
+  			//}
   		}
 	}
 }
 
-void CloudCorrespondenceMethods::calculate_correspondence_VFHkdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+void CloudCorrespondenceMethods::calculate_correspondence_ESFkdtree(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp, double delta)
 {
-	cout<<fp.size()<<" KdTree "<<fc.size()<<endl;
+	cout<<c1.size()<<" ESFKdTree "<<c2.size()<<endl;
 	map<int,pair<int,double>> m1,m2;
 
-	swap_check_correspondence_VFHkdtree(fp,fc,m1,delta);
-	swap_check_correspondence_VFHkdtree(fc,fp,m2,delta);
+	swap_check_correspondence_ESFkdtree(c1,c2,m1,delta);
+	swap_check_correspondence_ESFkdtree(c2,c1,m2,delta);
 
 	for(map<int,pair<int,double>>::iterator it1 = m1.begin();it1!=m1.end();it1++)
 	{
@@ -355,48 +356,45 @@ vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointX
 	return changed;
 }
 
-vector<double> getVFHValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
+vector<double> getFDValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
 {
-	vector<double> vfh_values;
-	pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::Normal> norm_est;
-	pcl::VFHEstimation<pcl::PointXYZI, pcl::Normal, pcl::VFHSignature308> vfh;
+	vector<double> values;
+	pcl::ESFEstimation<pcl::PointXYZI, pcl::ESFSignature640> esf;
 	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
 	{
-		pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
-	  	pcl::search::KdTree<pcl::PointXYZI>::Ptr _tree(new pcl::search::KdTree<pcl::PointXYZI>());
-  		//norm_est.setKSearch(10);	//K nearest neighbours, radius search can also be used
-  		norm_est.setRadiusSearch(0.1);
-	  	
-	  	norm_est.setInputCloud(c1[cc->first]);
-	  	norm_est.compute(*normals);
+		//pcl::visualization::PCLHistogramVisualizer viewer;
 
-	  	vfh.setInputCloud(c1[cc->first]);
-	  	vfh.setInputNormals(normals);
-	  	vfh.setSearchMethod(_tree);
-	  	pcl::PointCloud<pcl::VFHSignature308>::Ptr vfhs1(new pcl::PointCloud<pcl::VFHSignature308>());
-	  	vfh.compute(*vfhs1);
+	  	esf.setInputCloud(c1[cc->first]);
+	  	pcl::PointCloud<pcl::ESFSignature640>::Ptr esfs1(new pcl::PointCloud<pcl::ESFSignature640>);
+	  	esf.compute(*esfs1);
+	  	//viewer.addFeatureHistogram(*esfs1, 640,"cloud1"); 
 
-	  	normals.reset(new pcl::PointCloud<pcl::Normal>());
-	  	_tree.reset(new pcl::search::KdTree<pcl::PointXYZI>());
+	  	esf.setInputCloud(c2[cc->second.first]);
+	  	pcl::PointCloud<pcl::ESFSignature640>::Ptr esfs2(new pcl::PointCloud<pcl::ESFSignature640>);
+	  	esf.compute(*esfs2);
+	  	//viewer.addFeatureHistogram(*esfs2, 640,"cloud2");
 
-	  	norm_est.setInputCloud(c2[cc->second.first]);
-	  	norm_est.compute(*normals);
+	  	//viewer.spinOnce(2000);
 
-	  	vfh.setInputCloud(c2[cc->second.first]);
-	  	vfh.setInputNormals(normals);
-	  	vfh.setSearchMethod(_tree);
-	  	pcl::PointCloud<pcl::VFHSignature308>::Ptr vfhs2(new pcl::PointCloud<pcl::VFHSignature308>());
-	  	vfh.compute(*vfhs2);
 	  	vector<double> v1,v2;
-	  	for(int i=0;i<308;i++)
+	  	for(int i=0;i<640;i++)
 	  	{
-	  		v1.push_back(vfhs1->points[0].histogram[i]);
-	  		v2.push_back(vfhs2->points[0].histogram[i]);
+	  		v1.push_back(esfs1->points[0].histogram[i]);
+	  		v2.push_back(esfs2->points[0].histogram[i]);
 	  	}
 	  	LB_Improved filter(v1, v1.size() / 10);
-		vfh_values.push_back(filter.test(v2));
+		values.push_back(filter.test(v2));
+
+		/*pcl::KdTreeFLANN<pcl::ESFSignature640/*,flann::ChiSquareDistance<float>>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::ESFSignature640>);
+		kdtree->setInputCloud(esfs1);
+		std::vector<int> pointIdxNKNSearch(1);
+		std::vector<float> pointNKNSquaredDistance(1);
+		if(kdtree->nearestKSearch(esfs2->points[0], 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
+  		{
+  			values.push_back(pointNKNSquaredDistance[0]);
+  		}*/
 	}
-	return vfh_values;
+	return values;
 }
 
 visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
@@ -444,7 +442,7 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5;
 
-  marker.lifetime = ros::Duration(3);
+  marker.lifetime = ros::Duration(2);
   return marker;
 }
 
