@@ -3,7 +3,10 @@
 struct CloudCorrespondence
 {
 	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,cluster_collection;
+	pcl::PointCloud<pcl::Normal>::Ptr nor;
+	pcl::PointCloud<pcl::FPFHSignature33>::Ptr ld;
 	std::vector<pcl::PointIndices> cluster_indices;
+	pcl::PointIndices desc_indices;
 	std::vector<vector<double>> feature_bank;
 	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
 	static pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree;
@@ -12,6 +15,9 @@ struct CloudCorrespondence
 	CloudCorrespondence()
 	{
 		cloud.reset(new pcl::PointCloud<pcl::PointXYZI>);
+		cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
+		nor.reset(new pcl::PointCloud<pcl::Normal>);
+		ld.reset(new pcl::PointCloud<pcl::FPFHSignature33>);
 		init = false;
 	}
 	void initCC();

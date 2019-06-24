@@ -45,12 +45,16 @@ add_dependencies(pack test_work_generate_messages_cpp)
 
 add_executable(trans src/transform_test.cpp)
 target_link_libraries(trans ${catkin_LIBRARIES})
+add_dependencies(trans test_work_generate_messages_cpp)
 
 add_executable(mattest src/trans_matrix_test.cpp)
 target_link_libraries(mattest ${catkin_LIBRARIES})
 
 add_executable(mov src/moving_object_test.cpp)
 target_link_libraries(mov cluster_correspondence)
+
+add_executable(keypoint src/keypoint_matching.cpp)
+target_link_libraries(keypoint cluster_correspondence)
 
 add_executable(chk src/check_corres.cpp include/dtw/dtw.h)
 target_link_libraries(chk ${catkin_LIBRARIES})
