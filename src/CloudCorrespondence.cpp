@@ -397,6 +397,31 @@ vector<double> getFDValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c
 	return values;
 }
 
+vector<double> getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
+{
+	vector<double> estimates;
+	pcl::CorrespondencesPtr corrs(new pcl::Correspondences ());
+  	pcl::registration::CorrespondenceEstimation<pcl::PointXYZI, pcl::PointXYZI> corr_est;
+
+	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
+	{
+		corrs.reset(new pcl::Correspondences());
+  		corr_est.setInputSource(c1[cc->first]);
+  		corr_est.setInputTarget(c2[cc->second.first]);
+		corr_est.determineCorrespondences(*corrs);
+		double count = 0;
+		for(int i=0;i<corrs->size();i++)
+		{
+			if((*corrs)[i].distance>0.01 /*&& (*corrs)[i].distance<0.0001*/)
+			{
+				count++;
+			}
+		}
+		estimates.push_back(count/((c1[cc->first]->points.size()+c2[cc->second.first]->points.size())/2));
+	}
+	return estimates;
+}
+
 visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
 {
   Eigen::Vector4f centroid;

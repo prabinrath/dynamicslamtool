@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(test_work)
+project(test_work1)
 add_definitions(-std=c++0x)
 
 find_package(catkin REQUIRED COMPONENTS
@@ -41,11 +41,10 @@ target_link_libraries(cluster cluster_correspondence)
 
 add_executable(pack src/make_packet.cpp)
 target_link_libraries(pack ${catkin_LIBRARIES})
-add_dependencies(pack test_work_generate_messages_cpp)
+add_dependencies(pack test_work1_generate_messages_cpp)
 
 add_executable(trans src/transform_test.cpp)
 target_link_libraries(trans ${catkin_LIBRARIES})
-add_dependencies(trans test_work_generate_messages_cpp)
 
 add_executable(mattest src/trans_matrix_test.cpp)
 target_link_libraries(mattest ${catkin_LIBRARIES})
