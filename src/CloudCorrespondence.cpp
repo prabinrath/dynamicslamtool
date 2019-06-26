@@ -19,39 +19,6 @@ void CloudCorrespondence::filterPassThrough(float x,float y,float z)
   	pass.filter(*cloud);
 }
 
-void CloudCorrespondence::removePlaneSurface(float distance_threshold)
-{
-	pcl::SACSegmentation<pcl::PointXYZI> seg;
-  	seg.setOptimizeCoefficients(true);
-  	seg.setModelType(pcl::SACMODEL_PLANE);
-  	seg.setMethodType(pcl::SAC_RANSAC);
-  	seg.setMaxIterations(100);
-  	seg.setDistanceThreshold(distance_threshold);
-
-  	pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
-  	pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
-  	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_f(new pcl::PointCloud<pcl::PointXYZI>());
-  	int nr_points = (int) cloud->points.size();
-  	while (cloud->points.size () > 0.3 * nr_points)
-  	{
-	    // Segment the largest planar component from the remaining cloud
-	    seg.setInputCloud(cloud);
-	    seg.segment(*inliers, *coefficients);
-	    if (inliers->indices.size () == 0)
-	    {
-	      std::cout << "Could not estimate a planar model for the given dataset." << std::endl;
-	      break;
-	    }
-	    pcl::ExtractIndices<pcl::PointXYZI> extract;
-	    extract.setInputCloud(cloud);
-	    extract.setIndices(inliers);
-	    // Remove the planar inliers, extract the rest
-	    extract.setNegative (true);
-	    extract.filter (*cloud_f);
-	    *cloud = *cloud_f;
-	}
-}
-
 bool CloudCorrespondence::cluster_condition(const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
 {
 	//very slow and useless
@@ -67,7 +34,6 @@ bool CloudCorrespondence::cluster_condition(const pcl::PointXYZI& point_a, const
 
 void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 {
-	feature_bank.clear();
 	clusters.clear();
 	cluster_indices.clear();
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
@@ -88,6 +54,7 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
   	cec.setMaxClusterSize(25000);
   	cec.segment(cluster_indices);
 	*/
+
   	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   	{
   		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>);
@@ -109,293 +76,89 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	    sor.filter(*cloud_cluster);
 
 	    clusters.push_back(cloud_cluster);
-	    /*///////////////////////////////////////////// Feature Extraction : Viewpoint Feature Histogram
-	  	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
-	  	pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::Normal> norm_est;
-  		//norm_est.setKSearch(10);	//K nearest neighbours, radius search can also be used
-  		norm_est.setRadiusSearch(0.1);
-	  	norm_est.setInputCloud(cloud_cluster);
-	  	norm_est.compute(*normals);
 
-	  	pcl::VFHEstimation<pcl::PointXYZI, pcl::Normal, pcl::VFHSignature308> vfh;
-	  	vfh.setInputCloud(cloud_cluster);
-	  	vfh.setInputNormals(normals);
-	  	pcl::search::KdTree<pcl::PointXYZI>::Ptr _tree(new pcl::search::KdTree<pcl::PointXYZI>());
-	  	vfh.setSearchMethod(_tree);
-	  	pcl::PointCloud<pcl::VFHSignature308>::Ptr vfhs(new pcl::PointCloud<pcl::VFHSignature308>());
-	  	vfh.compute(*vfhs);
-	  	//std::cout<<vfhs->points[0]<<std::endl;
-
-	  	//pcl::visualization::PCLHistogramVisualizer viewer;
-	  	//viewer.addFeatureHistogram(*vfhs, 308); 
-	  	//viewer.spinOnce(1000);
-		vector<double> vec;
-	  	for(int i=0;i<308;i++)
-	  	{
-	  		vec.push_back(vfhs->points[0].histogram[i]);
-	  	}
-	  	/*//////////////////////////////////////////////////////////////////////
-
-	    Eigen::Vector4f centroid;
-	    pcl::compute3DCentroid(*cloud_cluster, centroid);
-	    vector<double> vec;
-	    vec.push_back(centroid[0]);vec.push_back(centroid[1]);vec.push_back(centroid[2]);
-
-		feature_bank.push_back(vec);
+	    Eigen::Vector4d temp;
+	    pcl::compute3DCentroid(*cloud_cluster, temp);
+	    pcl::PointXYZ centroid;
+	    centroid.x = temp[0]; centroid.y = temp[1]; centroid.z = temp[2];
+	    centroid_collection->points.push_back(centroid);
   	}
 
+  	centroid_collection->width = centroid_collection->points.size();
+	centroid_collection->height = 1;
+	centroid_collection->is_dense = true;
   	cluster_collection->width = cluster_collection->points.size();
 	cluster_collection->height = 1;
 	cluster_collection->is_dense = true;
 }
 
-void CloudCorrespondenceMethods::swap_check_correspondence_centroidKdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+void CloudCorrespondenceMethods::calculateCorrespondenceCentroidKdtree(pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta)
 {
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cldp(new pcl::PointCloud<pcl::PointXYZ>());
-
-	for(int i=0;i<fp.size();i++)
-	{
-		pcl::PointXYZ pt;
-		pt.x = fp[i][0];
-		pt.y = fp[i][1];
-		pt.z = fp[i][2];
-		cldp->points.push_back(pt);
-	} 
-
-	pcl::KdTreeFLANN<pcl::PointXYZ,flann::ChiSquareDistance<float>>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::PointXYZ>);
-	kdtree->setInputCloud(cldp);
-
-	for(int i=0;i<fc.size();i++)
-	{
-		pcl::PointXYZ pt;
-		pt.x = fc[i][0];
-		pt.y = fc[i][1];
-		pt.z = fc[i][2];
-
-		int K = 1;
-		std::vector<int> pointIdxNKNSearch(K);
-		std::vector<float> pointNKNSquaredDistance(K);
-
-		if(kdtree->nearestKSearch(pt, K, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
-  		{
-  			if(pointNKNSquaredDistance[0]<delta)
-  			{
-	  			if(mp.find(pointIdxNKNSearch[0]) == mp.end())
-	  			{
-	  				mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
-	  			}
-	  			else
-	  			{
-	  				if(mp[pointIdxNKNSearch[0]].second>pointNKNSquaredDistance[0])
-	  				{
-	  					mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
-	  				}
-	  			}
-  			}
-  		}		
-	}
+	pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> corr_est;
+	mp.reset(new pcl::Correspondences());
+  	corr_est.setInputSource(fp);
+  	corr_est.setInputTarget(fc);
+	corr_est.determineReciprocalCorrespondences(*mp);
 }
 
-void CloudCorrespondenceMethods::calculate_correspondence_centroidKdtree(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta)
+vector<double> CloudCorrespondenceMethods::getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp)
 {
-	cout<<fp.size()<<" Centroid "<<fc.size()<<endl;
-	map<int,pair<int,double>> m1,m2;
+	vector<double> estimates;
+  	pcl::registration::CorrespondenceEstimation<pcl::PointXYZI, pcl::PointXYZI> corr_est;
+  	pcl::CorrespondencesPtr corrs;
 
-	swap_check_correspondence_centroidKdtree(fp,fc,m1,delta);
-	swap_check_correspondence_centroidKdtree(fc,fp,m2,delta);
-
-	for(map<int,pair<int,double>>::iterator it1 = m1.begin();it1!=m1.end();it1++)
+	for(int j=0;j<mp->size();j++)
 	{
-		map<int,pair<int,double>>::iterator fnd = m2.find(it1->second.first);
-		if(fnd != m2.end())
+		corrs.reset(new pcl::Correspondences());
+  		corr_est.setInputSource(c1[(*mp)[j].index_query]);
+  		corr_est.setInputTarget(c2[(*mp)[j].index_match]);
+		corr_est.determineCorrespondences(*corrs);
+		double count = 0;
+		for(int i=0;i<corrs->size();i++)
 		{
-			if(fnd->second.first == it1->first)
+			if((*corrs)[i].distance>0.01 /*&& (*corrs)[i].distance<0.0001*/)
 			{
-				mp[it1->first] = {it1->second.first,min(it1->second.second,fnd->second.second)};
+				count++;
 			}
 		}
+		estimates.push_back(count/((c1[(*mp)[j].index_query]->points.size()+c2[(*mp)[j].index_match]->points.size())/2));
 	}
+	return estimates;
 }
 
-void CloudCorrespondenceMethods::calculate_correspondence_dtw(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta)
+tf::Transform CloudCorrespondenceMethods::getTransformFromPose(tf::Pose &p1,tf::Pose &p2)
 {
-	cout<<fp.size()<<" DTW "<<fc.size()<<endl;
-	for(int i=0;i<fc.size();i++)
-	{
-		LB_Improved filter(fc[i], fc[i].size() / 10);
-		double bestfit = filter.getLowestCost();
-		int ind = 0;
-		for(int j=0;j<fp.size();j++)
-		{
-			double curr = filter.test(fp[j]);
-			if(curr<bestfit)
-			{
-				bestfit = curr;
-				ind = j;
-			}
-		}
-		if(bestfit<delta)
-		{
-			if(mp.find(ind)==mp.end())
-			{
-				mp[ind]={i,bestfit};
-			}
-			else
-			{
-				if(mp[ind].second>bestfit)
-				{
-					mp[ind]={i,bestfit};
-				}
-			}
-		}
-	}	
+  tf::Transform t;
+  double roll1, pitch1, yaw1, roll2, pitch2, yaw2;
+  float linearposx1,linearposy1,linearposz1,linearposx2,linearposy2,linearposz2;
+  boost::shared_ptr<tf::Quaternion> qtn;
+  tf::Matrix3x3 mat;
+
+  linearposx1 = p1.getOrigin().getX();
+  linearposy1 = p1.getOrigin().getY();
+  linearposz1 = p1.getOrigin().getZ();
+  qtn.reset(new tf::Quaternion(p1.getRotation().getX(), p1.getRotation().getY(), p1.getRotation().getZ(), p1.getRotation().getW()));
+  mat.setRotation(*qtn);
+  mat.getRPY(roll1, pitch1, yaw1);
+
+  linearposx2 = p2.getOrigin().getX();
+  linearposy2 = p2.getOrigin().getY();
+  linearposz2 = p2.getOrigin().getZ();
+  qtn.reset(new tf::Quaternion(p2.getRotation().getX(), p2.getRotation().getY(), p2.getRotation().getZ(), p2.getRotation().getW()));
+  mat.setRotation(*qtn);
+  mat.getRPY(roll2, pitch2, yaw2);
+
+  qtn->setRPY(roll1-roll2,pitch1-pitch2,yaw1-yaw2);
+  tf::Vector3 v(linearposx1-linearposx2,linearposy1-linearposy2,linearposz1-linearposz2);
+  t.setOrigin(v);
+  t.setRotation(*qtn);
+  //Eigen::Matrix4f m;
+  //pcl_ros::transformAsMatrix(t,m);
+  //cout<<m<<endl<<endl;
+  return t;
 }
 
-void CloudCorrespondenceMethods::swap_check_correspondence_ESFkdtree(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp, double delta)
-{
-	pcl::PointCloud<pcl::ESFSignature640>::Ptr temp(new pcl::PointCloud<pcl::ESFSignature640>),cldp(new pcl::PointCloud<pcl::ESFSignature640>);
-	pcl::ESFEstimation<pcl::PointXYZI, pcl::ESFSignature640> esf;
-	for(int i=0;i<c1.size();i++)
-	{
-		esf.setInputCloud(c1[i]);
-		esf.compute(*temp);
-		cldp->points.push_back(temp->points[0]);
-	}
-	
-	pcl::KdTreeFLANN<pcl::ESFSignature640/*,flann::ChiSquareDistance<float>*/>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::ESFSignature640>);
-	kdtree->setInputCloud(cldp);
-
-	for(int i=0;i<c2.size();i++)
-	{
-		esf.setInputCloud(c2[i]);
-		esf.compute(*temp);
-
-		int K = 1;
-		std::vector<int> pointIdxNKNSearch(K);
-		std::vector<float> pointNKNSquaredDistance(K);
-
-		if(kdtree->nearestKSearch(temp->points[0], K, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
-  		{
-  			//if(pointNKNSquaredDistance[0]<delta)
-  			//{
-	  			if(mp.find(pointIdxNKNSearch[0]) == mp.end())
-	  			{
-	  				mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
-	  			}
-	  			else
-	  			{
-	  				if(mp[pointIdxNKNSearch[0]].second>pointNKNSquaredDistance[0])
-	  				{
-	  					mp[pointIdxNKNSearch[0]] = {i,pointNKNSquaredDistance[0]};
-	  				}
-	  			}
-  			//}
-  		}
-	}
-}
-
-void CloudCorrespondenceMethods::calculate_correspondence_ESFkdtree(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp, double delta)
-{
-	cout<<c1.size()<<" ESFKdTree "<<c2.size()<<endl;
-	map<int,pair<int,double>> m1,m2;
-
-	swap_check_correspondence_ESFkdtree(c1,c2,m1,delta);
-	swap_check_correspondence_ESFkdtree(c2,c1,m2,delta);
-
-	for(map<int,pair<int,double>>::iterator it1 = m1.begin();it1!=m1.end();it1++)
-	{
-		map<int,pair<int,double>>::iterator fnd = m2.find(it1->second.first);
-		if(fnd != m2.end())
-		{
-			if(fnd->second.first == it1->first)
-			{
-				mp[it1->first] = {it1->second.first,min(it1->second.second,fnd->second.second)};
-			}
-		}
-	}
-}
-
-double getDifference(vector<double> c1,vector<double> c2)
-{
-	return sqrt(pow(c1[0]-c2[0],2)+pow(c1[1]-c2[1],2)+pow(c1[2]-c2[2],2));
-}
-
-vector<double> getDisplacementVector(vector<vector<double>> &f1,vector<vector<double>> &f2, map<int,pair<int,double>> &mp)
-{
-	vector<double> disp;
-	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
-	{
-		double max_disp = 0;
-		for(map<int,pair<int,double>>::iterator tt=mp.begin();tt!=mp.end();tt++)
-		{
-			max_disp+=abs(getDifference(f1[cc->first],f1[tt->first])-getDifference(f2[cc->second.first],f2[tt->second.first]));
-		}
-		disp.push_back(max_disp);
-	}
-	return disp;
-}
-
-vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp,float resolution = 0.3f)
-{
-	vector<long> changed;
-	srand((unsigned int)time(NULL));
-	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
-	{
-		long max_change = 0;
-		pcl::octree::OctreePointCloudChangeDetector<pcl::PointXYZI> octree_cd(resolution);
-		octree_cd.setInputCloud(c1[cc->first]);
-		octree_cd.addPointsFromInputCloud();
-		octree_cd.switchBuffers();
-		octree_cd.setInputCloud(c2[cc->second.first]);
-		octree_cd.addPointsFromInputCloud();
-		
-		std::vector<int> newPointIdxVector;
-		octree_cd.getPointIndicesFromNewVoxels(newPointIdxVector);
-		changed.push_back(newPointIdxVector.size());
-	}
-	return changed;
-}
-
-vector<double> getFDValuesVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp)
-{
-	vector<double> values;
-	pcl::ESFEstimation<pcl::PointXYZI, pcl::ESFSignature640> esf;
-	for(map<int,pair<int,double>>::iterator cc=mp.begin();cc!=mp.end();cc++)
-	{
-		//pcl::visualization::PCLHistogramVisualizer viewer;
-
-	  	esf.setInputCloud(c1[cc->first]);
-	  	pcl::PointCloud<pcl::ESFSignature640>::Ptr esfs1(new pcl::PointCloud<pcl::ESFSignature640>);
-	  	esf.compute(*esfs1);
-	  	//viewer.addFeatureHistogram(*esfs1, 640,"cloud1"); 
-
-	  	esf.setInputCloud(c2[cc->second.first]);
-	  	pcl::PointCloud<pcl::ESFSignature640>::Ptr esfs2(new pcl::PointCloud<pcl::ESFSignature640>);
-	  	esf.compute(*esfs2);
-	  	//viewer.addFeatureHistogram(*esfs2, 640,"cloud2");
-
-	  	//viewer.spinOnce(2000);
-
-	  	vector<double> v1,v2;
-	  	for(int i=0;i<640;i++)
-	  	{
-	  		v1.push_back(esfs1->points[0].histogram[i]);
-	  		v2.push_back(esfs2->points[0].histogram[i]);
-	  	}
-	  	LB_Improved filter(v1, v1.size() / 10);
-		values.push_back(filter.test(v2));
-
-		/*pcl::KdTreeFLANN<pcl::ESFSignature640/*,flann::ChiSquareDistance<float>>::Ptr kdtree(new pcl::KdTreeFLANN<pcl::ESFSignature640>);
-		kdtree->setInputCloud(esfs1);
-		std::vector<int> pointIdxNKNSearch(1);
-		std::vector<float> pointNKNSquaredDistance(1);
-		if(kdtree->nearestKSearch(esfs2->points[0], 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
-  		{
-  			values.push_back(pointNKNSquaredDistance[0]);
-  		}*/
-	}
-	return values;
-}
+////////////////////////////////////////////////////////////////////Helping Methods
 
 visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
 {
@@ -444,36 +207,4 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
 
   marker.lifetime = ros::Duration(2);
   return marker;
-}
-
-tf::Transform getTransformFromPose(tf::Pose &p1,tf::Pose &p2)
-{
-  tf::Transform t;
-  double roll1, pitch1, yaw1, roll2, pitch2, yaw2;
-  float linearposx1,linearposy1,linearposz1,linearposx2,linearposy2,linearposz2;
-  boost::shared_ptr<tf::Quaternion> qtn;
-  tf::Matrix3x3 mat;
-
-  linearposx1 = p1.getOrigin().getX();
-  linearposy1 = p1.getOrigin().getY();
-  linearposz1 = p1.getOrigin().getZ();
-  qtn.reset(new tf::Quaternion(p1.getRotation().getX(), p1.getRotation().getY(), p1.getRotation().getZ(), p1.getRotation().getW()));
-  mat.setRotation(*qtn);
-  mat.getRPY(roll1, pitch1, yaw1);
-
-  linearposx2 = p2.getOrigin().getX();
-  linearposy2 = p2.getOrigin().getY();
-  linearposz2 = p2.getOrigin().getZ();
-  qtn.reset(new tf::Quaternion(p2.getRotation().getX(), p2.getRotation().getY(), p2.getRotation().getZ(), p2.getRotation().getW()));
-  mat.setRotation(*qtn);
-  mat.getRPY(roll2, pitch2, yaw2);
-
-  qtn->setRPY(roll1-roll2,pitch1-pitch2,yaw1-yaw2);
-  tf::Vector3 v(linearposx1-linearposx2,linearposy1-linearposy2,linearposz1-linearposz2);
-  t.setOrigin(v);
-  t.setRotation(*qtn);
-  //Eigen::Matrix4f m;
-  //pcl_ros::transformAsMatrix(t,m);
-  //cout<<m<<endl<<endl;
-  return t;
 }

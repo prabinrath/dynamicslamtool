@@ -3,15 +3,10 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <nav_msgs/Odometry.h>
-#include <pcl/ModelCoefficients.h>
 #include <pcl/correspondence.h>
-#include <pcl/visualization/histogram_visualizer.h>
-#include <pcl/octree/octree_pointcloud_changedetector.h>
+//#include <pcl/visualization/histogram_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/sample_consensus/model_types.h>
 #include <pcl/registration/correspondence_estimation.h>
-#include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/conditional_euclidean_clustering.h>
 #include <pcl/kdtree/kdtree.h>
@@ -21,9 +16,7 @@
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/Marker.h>
 #include <pcl/features/normal_3d_omp.h>
-#include <pcl/features/fpfh.h>
-#include <pcl/features/esf.h>
-#include <pcl/keypoints/sift_keypoint.h>
+//#include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

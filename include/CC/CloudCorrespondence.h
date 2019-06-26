@@ -3,11 +3,9 @@
 struct CloudCorrespondence
 {
 	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,cluster_collection;
+	pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_collection;
 	pcl::PointCloud<pcl::Normal>::Ptr nor;
-	pcl::PointCloud<pcl::FPFHSignature33>::Ptr ld;
 	std::vector<pcl::PointIndices> cluster_indices;
-	pcl::PointIndices desc_indices;
-	std::vector<vector<double>> feature_bank;
 	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
 	static pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree;
 	tf::Pose ps;
@@ -16,11 +14,10 @@ struct CloudCorrespondence
 	{
 		cloud.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
+		centroid_collection.reset(new pcl::PointCloud<pcl::PointXYZ>);
 		nor.reset(new pcl::PointCloud<pcl::Normal>);
-		ld.reset(new pcl::PointCloud<pcl::FPFHSignature33>);
 		init = false;
 	}
-	void initCC();
 	void filterPassThrough(float,float,float);
 	void removePlaneSurface(float);
 	void computeClusters(float,string);
@@ -29,10 +26,8 @@ struct CloudCorrespondence
 
 class CloudCorrespondenceMethods
 {
-	void swap_check_correspondence_ESFkdtree(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp, double delta);
-	void swap_check_correspondence_centroidKdtree(vector<vector<double>> &fp,vector<vector<double>> &fc, map<int,pair<int,double>> &mp, double delta);
 	public:
-		void calculate_correspondence_dtw(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta);
-		void calculate_correspondence_ESFkdtree(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, map<int,pair<int,double>> &mp,double delta);
-		void calculate_correspondence_centroidKdtree(vector<vector<double>> &fp, vector<vector<double>> &fc, map<int,pair<int,double>> &mp,double delta);
+		void calculateCorrespondenceCentroidKdtree(pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta);
+		vector<double> getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp);
+		tf::Transform getTransformFromPose(tf::Pose &p1,tf::Pose &p2);
 };
