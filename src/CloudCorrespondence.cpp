@@ -69,12 +69,6 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	    cloud_cluster->height = 1;
 	    cloud_cluster->is_dense = true;
 
-	    pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
-	    sor.setInputCloud(cloud_cluster);
-	    sor.setMeanK(100);
-	    sor.setStddevMulThresh(0.8);
-	    sor.filter(*cloud_cluster);
-
 	    clusters.push_back(cloud_cluster);
 
 	    Eigen::Vector4d temp;
@@ -92,31 +86,97 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 	cluster_collection->is_dense = true;
 }
 
-void CloudCorrespondenceMethods::calculateCorrespondenceCentroidKdtree(pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta)
+void CloudCorrespondenceMethods::calculateCorrespondenceCentroid(pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta)
 {
 	pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> corr_est;
-	mp.reset(new pcl::Correspondences());
   	corr_est.setInputSource(fp);
   	corr_est.setInputTarget(fc);
 	corr_est.determineReciprocalCorrespondences(*mp);
 }
 
+bool CloudCorrespondenceMethods::densityConstraint(const pcl::PointXYZI& point_a,pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints,pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree,long threshold)
+{
+  	std::vector<int> pointIdxRadiusSearch;
+  	std::vector<float> pointRadiusSquaredDistance;
+  	tree->setInputCloud(keypoints);
+  	if ( tree->radiusSearch(point_a, 0.2, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
+  	{
+  		if(pointIdxRadiusSearch.size()>threshold)
+  			return true;
+  	}
+  	return false;
+}
+
+bool CloudCorrespondenceMethods::volumeConstraint(pcl::PointCloud<pcl::PointXYZI>::Ptr fp, pcl::PointCloud<pcl::PointXYZI>::Ptr fc,double threshold)
+{
+	Eigen::Vector4f min;
+  	Eigen::Vector4f max;
+  	double volp,volc;
+
+  	pcl::getMinMax3D(*fp, min, max);
+  	volp = (max[0]-min[0])*(max[1]-min[1])*(max[2]-min[2]);
+  	pcl::getMinMax3D(*fc, min, max);
+  	volc = (max[0]-min[0])*(max[1]-min[1])*(max[2]-min[2]);
+
+  	if((abs(volp-volc)/(volp+volc))<threshold)
+  	{
+  		return true;
+  	}
+  	return false;
+}
+
+vector<long> CloudCorrespondenceMethods::getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
+{
+  cout<<"\n ********* PC Change *********** \n";
+  vector<long> changed;
+  srand((unsigned int)time(NULL));
+  for(int j=0;j<mp->size();j++)
+  {
+    if(!volumeConstraint(c1[(*mp)[j].index_query],c2[(*mp)[j].index_match],0.5))
+    {
+      cout<<"Cluster Skipped!\n";
+      changed.push_back(-1);
+      continue;
+    }
+
+    pcl::octree::OctreePointCloudChangeDetector<pcl::PointXYZI> octree_cd(resolution);
+    octree_cd.setInputCloud(c1[(*mp)[j].index_query]);
+    octree_cd.addPointsFromInputCloud();
+    octree_cd.switchBuffers();
+    octree_cd.setInputCloud(c2[(*mp)[j].index_match]);
+    octree_cd.addPointsFromInputCloud();
+    
+    std::vector<int> newPointIdxVector;
+    octree_cd.getPointIndicesFromNewVoxels(newPointIdxVector);
+    changed.push_back(newPointIdxVector.size());
+  }
+  return changed;
+}
+
 vector<double> CloudCorrespondenceMethods::getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp)
 {
+  cout<<"\n ********* Distance Estimate *********** \n";
 	vector<double> estimates;
-  	pcl::registration::CorrespondenceEstimation<pcl::PointXYZI, pcl::PointXYZI> corr_est;
-  	pcl::CorrespondencesPtr corrs;
-
+  pcl::registration::CorrespondenceEstimation<pcl::PointXYZI, pcl::PointXYZI> corr_est;
+  pcl::CorrespondencesPtr corrs;    
 	for(int j=0;j<mp->size();j++)
 	{
+		if(!volumeConstraint(c1[(*mp)[j].index_query],c2[(*mp)[j].index_match],0.5))
+		{
+			cout<<"Cluster Skipped!\n";
+			estimates.push_back(-1);
+			continue;
+		}
+
 		corrs.reset(new pcl::Correspondences());
-  		corr_est.setInputSource(c1[(*mp)[j].index_query]);
-  		corr_est.setInputTarget(c2[(*mp)[j].index_match]);
+  	corr_est.setInputSource(c1[(*mp)[j].index_query]);
+  	corr_est.setInputTarget(c2[(*mp)[j].index_match]);
+
 		corr_est.determineCorrespondences(*corrs);
 		double count = 0;
 		for(int i=0;i<corrs->size();i++)
 		{
-			if((*corrs)[i].distance>0.01 /*&& (*corrs)[i].distance<0.0001*/)
+			if((*corrs)[i].distance>0.005 && (*corrs)[i].distance<0.5)
 			{
 				count++;
 			}
@@ -124,38 +184,6 @@ vector<double> CloudCorrespondenceMethods::getPointDistanceEstimateVector(vector
 		estimates.push_back(count/((c1[(*mp)[j].index_query]->points.size()+c2[(*mp)[j].index_match]->points.size())/2));
 	}
 	return estimates;
-}
-
-tf::Transform CloudCorrespondenceMethods::getTransformFromPose(tf::Pose &p1,tf::Pose &p2)
-{
-  tf::Transform t;
-  double roll1, pitch1, yaw1, roll2, pitch2, yaw2;
-  float linearposx1,linearposy1,linearposz1,linearposx2,linearposy2,linearposz2;
-  boost::shared_ptr<tf::Quaternion> qtn;
-  tf::Matrix3x3 mat;
-
-  linearposx1 = p1.getOrigin().getX();
-  linearposy1 = p1.getOrigin().getY();
-  linearposz1 = p1.getOrigin().getZ();
-  qtn.reset(new tf::Quaternion(p1.getRotation().getX(), p1.getRotation().getY(), p1.getRotation().getZ(), p1.getRotation().getW()));
-  mat.setRotation(*qtn);
-  mat.getRPY(roll1, pitch1, yaw1);
-
-  linearposx2 = p2.getOrigin().getX();
-  linearposy2 = p2.getOrigin().getY();
-  linearposz2 = p2.getOrigin().getZ();
-  qtn.reset(new tf::Quaternion(p2.getRotation().getX(), p2.getRotation().getY(), p2.getRotation().getZ(), p2.getRotation().getW()));
-  mat.setRotation(*qtn);
-  mat.getRPY(roll2, pitch2, yaw2);
-
-  qtn->setRPY(roll1-roll2,pitch1-pitch2,yaw1-yaw2);
-  tf::Vector3 v(linearposx1-linearposx2,linearposy1-linearposy2,linearposz1-linearposz2);
-  t.setOrigin(v);
-  t.setRotation(*qtn);
-  //Eigen::Matrix4f m;
-  //pcl_ros::transformAsMatrix(t,m);
-  //cout<<m<<endl<<endl;
-  return t;
 }
 
 ////////////////////////////////////////////////////////////////////Helping Methods
@@ -205,6 +233,6 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5;
 
-  marker.lifetime = ros::Duration(2);
+  marker.lifetime = ros::Duration(1);
   return marker;
 }

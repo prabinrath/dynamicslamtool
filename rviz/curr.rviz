@@ -57,7 +57,7 @@ Visualization Manager:
       Marker Topic: bbox
       Name: Marker
       Namespaces:
-        bounding_box: true
+        {}
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -75,7 +75,7 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 100
+      Max Intensity: 0
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: PointCloud2
@@ -83,7 +83,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.00999999978
+      Size (m): 0.100000001
       Style: Flat Squares
       Topic: output
       Unreliable: false
@@ -115,7 +115,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 8.27915859
+      Distance: 12.4726963
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
@@ -130,10 +130,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.12479627
+      Pitch: 0.714796662
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.14539933
+      Yaw: 3.14039874
     Saved: ~
 Window Geometry:
   Displays:
@@ -151,5 +151,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1200
-  X: 479
-  Y: 50
+  X: 480
+  Y: 24

@@ -5,6 +5,7 @@
 #include <nav_msgs/Odometry.h>
 #include <pcl/correspondence.h>
 //#include <pcl/visualization/histogram_visualizer.h>
+#include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/segmentation/extract_clusters.h>
@@ -16,7 +17,7 @@
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/Marker.h>
 #include <pcl/features/normal_3d_omp.h>
-//#include <pcl/keypoints/sift_keypoint.h>
+#include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
