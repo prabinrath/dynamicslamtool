@@ -59,14 +59,17 @@ void transform_pc(const nav_msgs::OdometryConstPtr& odm)
 	else
 	{
 		tf::poseMsgToTF(odm->pose.pose,p2);
-		Eigen::Matrix4f m = getTransformFromPose(p1,p2);
-  	sensor_msgs::PointCloud2Ptr tranformedPC(new sensor_msgs::PointCloud2());
+		//Eigen::Matrix4f m = getTransformFromPose(p1,p2);
+  	tf::Transform t = p2.inverseTimes(p1);
+    Eigen::Matrix4f m;
+    pcl_ros::transformAsMatrix(t,m);
+    sensor_msgs::PointCloud2Ptr tranformedPC(new sensor_msgs::PointCloud2());
   	pcl_ros::transformPointCloud(m,cloud_,*tranformedPC);
   	tranformedPC->header.stamp = odm->header.stamp;
   	tranformedPC->header.frame_id = "/camera_odom_frame";
   	pub.publish(*tranformedPC);
-  	//cloud_ = *tranformedPC;
-  	//p1 = p2;
+  	cloud_ = *tranformedPC;
+  	p1 = p2;
 	}
 }
 

@@ -23,15 +23,20 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 	cb->init = true;
 	if(ca->init  == true && cb->init == true)
 	{
-		tf::Transform t = getTransformFromPose(ca->ps,cb->ps);
+		//tf::Transform t = getTransformFromPose(ca->ps,cb->ps);
+		tf::Transform t = (cb->ps).inverseTimes(ca->ps);
+
 		pcl::PointCloud<pcl::PointXYZI> temp = *ca->cloud;
 	  	pcl_ros::transformPointCloud(temp,*ca->cloud,t);
 
-		ca->filterPassThrough(5.0,5.0,5.0);
-		ca->computeClusters(0.1,"single_cluster");
+	  	if(ca->cluster_collection->points.size() == 0)
+    	{
+    		ca->filterPassThrough(5.0,5.0,5.0);
+			ca->computeClusters(0.1,"single_cluster");
+		}
 		cb->filterPassThrough(5.0,5.0,5.0);
 		cb->computeClusters(0.1,"single_cluster");
-
+		
 		pcl::toPCLPointCloud2(*(ca->cluster_collection),*cloud);
 		pcl_conversions::fromPCL(*cloud, output);
 		output.header.frame_id = "previous";
@@ -48,16 +53,18 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 	  	//mth->calculate_correspondence_ESFkdtree(ca->clusters,cb->clusters,mp,0.05);
 	  	
 	  	/*moving object detection methods (Local)*/
-	  	//vector<double> param_vec = getDisplacementVector(ca->feature_bank,cb->feature_bank,mp);
-	  	//vector<double> param_vec = getFDValuesVector(ca->clusters,cb->clusters,mp);
-	  	//vector<long> param_vec = getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.3);
-	  	vector<double> param_vec = getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
+	  	//vector<double> param_vec = getDisplacementVector(ca->feature_bank,cb->feature_bank,mp); //Dosen't work
+	  	//vector<double> param_vec = getFDValuesVector(ca->clusters,cb->clusters,mp); //Dosen't work
+	  	vector<long> param_vec = getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1); //Will work with confidence score
+	  	//vector<double> param_vec = getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp); //Will work with confidence score
 
 	  	float rs=0.4,gs=0.6,bs=0.8,rd=0.8,gd=0.1,bd=0.4;int id = 1;
 	  	for(map<int,pair<int,double>>::iterator it=mp.begin();it!=mp.end();it++)
 		{
 			cout<<"{"<<it->second.first<<"->"<<it->first<<"} Fit Score: "<<it->second.second<<" Moving_Score: "<<param_vec[id-1]<<endl;
-			if(param_vec[id-1]>0.005)
+			long threshold = (ca->clusters[it->first]->points.size()+cb->clusters[it->second.first]->points.size())/20;
+			//double threshold = 0.1;
+			if(param_vec[id-1]>threshold)
 			{
 				marker_pub.publish(mark_cluster(ca->clusters[it->first],id,"previous","bounding_box",rd,gd,bd));
 				marker_pub.publish(mark_cluster(cb->clusters[it->second.first],id,"current","bounding_box",rd,gd,bd));

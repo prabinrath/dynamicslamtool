@@ -412,7 +412,7 @@ vector<double> getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointX
 		double count = 0;
 		for(int i=0;i<corrs->size();i++)
 		{
-			if((*corrs)[i].distance>0.01 /*&& (*corrs)[i].distance<0.0001*/)
+			if((*corrs)[i].distance>0.005 && (*corrs)[i].distance<0.2)
 			{
 				count++;
 			}
@@ -420,6 +420,34 @@ vector<double> getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointX
 		estimates.push_back(count/((c1[cc->first]->points.size()+c2[cc->second.first]->points.size())/2));
 	}
 	return estimates;
+}
+
+vector<double> getTMatrixCorrespondence(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,tf::Transform &t)
+{
+	  vector<double> estimates;
+	  Eigen::Matrix4f m,result;
+  	pcl_ros::transformAsMatrix(t,m);
+    
+  	pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+
+  	for(int j=0;j<mp->size();j++)
+	  {
+  		  icp.setInputSource(c1[(*mp)[j].index_query]);
+    		icp.setInputTarget(c2[(*mp)[j].index_match]);
+    		icp.setMaximumIterations(60);
+    		//icp.setTransformationEpsilon (1e-9);
+    		icp.setMaxCorrespondenceDistance(0.1);
+    		//icp.setEuclideanFitnessEpsilon (1);
+    		icp.setRANSACOutlierRejectionThreshold(0.03);
+    		pcl::PointCloud<pcl::PointXYZI> Final;
+    		icp.align(Final);
+     		result = icp.getFinalTransformation();
+
+  		cout<<"\n#####################\n"<<m<<"\n Fitness: "<<icp.hasConverged()<<" "<<icp.getFitnessScore()<<"\n"<<result<<"\n################################\n";
+
+  		estimates.push_back(0);
+	  }
+	  return estimates;
 }
 
 visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
