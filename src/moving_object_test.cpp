@@ -1,4 +1,5 @@
 #include "CC/CloudCorrespondence.h"
+#include <ctime>
 extern visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5);
 
 ros::Publisher pub,marker_pub;
@@ -40,9 +41,10 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 
 	if(ca->init  == true && cb->init == true)
 	{
+		std::clock_t begin_time = std::clock();
 		tf::Transform t = (cb->ps).inverseTimes(ca->ps);
 
-    	pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_t(new pcl::PointCloud<pcl::PointXYZI>);
+    	pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_t(new pcl::PointCloud<pcl::PointXYZI>),rotated_p(new pcl::PointCloud<pcl::PointXYZI>);
 
 		pcl_ros::transformPointCloud(*ca->cloud,*keypoints_t,t);
 
@@ -54,12 +56,20 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 
 		pcl::PointCloud<pcl::PointXYZI> corrs_ca;
 		pcl::PointCloud<pcl::PointXYZ> dir_cloud;
+
+		tf::Transform rot;
+		rot.setIdentity();
+		rot.setRotation(t.getRotation());
+		pcl_ros::transformPointCloud(*ca->cloud,*rotated_p,rot);
+
 		for(int i=0;i<corrs->size();i++)
 		{
 			if((*corrs)[i].distance<0.01)
 			{
-				corrs_ca.points.push_back(ca->cloud->points[(*corrs)[i].index_query]);
-				pcl::PointXYZ dir = getDirectionVector(ca->cloud->points[(*corrs)[i].index_query],cb->cloud->points[(*corrs)[i].index_match]); 
+				//corrs_ca.points.push_back(ca->cloud->points[(*corrs)[i].index_query]);
+				//pcl::PointXYZ dir = getDirectionVector(ca->cloud->points[(*corrs)[i].index_query],cb->cloud->points[(*corrs)[i].index_match]);
+				corrs_ca.points.push_back(rotated_p->points[(*corrs)[i].index_query]);
+				pcl::PointXYZ dir = getDirectionVector(rotated_p->points[(*corrs)[i].index_query],cb->cloud->points[(*corrs)[i].index_match]); 
 				dir_cloud.points.push_back(dir);
 				cout<<"Direction: "<<dir.x<<" "<<dir.y<<" "<<dir.z<<" Distance: "<<(*corrs)[i].distance<<endl;
 			}
@@ -70,6 +80,8 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 		corrs_ca.width = corrs_ca.points.size();
 		corrs_ca.height = 1;
 		corrs_ca.is_dense = true;
+
+		tf::Quaternion qt;
 
 		pcl::toPCLPointCloud2(corrs_ca,*cloud);
 		pcl_conversions::fromPCL(*cloud, output);
@@ -83,7 +95,9 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 		pcl_conversions::fromPCL(*cloud, output);
 		output.header.frame_id = "direction";
 		pub.publish(output);
+
 		cout<<"-----------------------------------------------------\n";
+		cout<<1000.0*(std::clock()-begin_time)/CLOCKS_PER_SEC<<endl;
 	}
 }
 

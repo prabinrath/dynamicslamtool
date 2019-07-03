@@ -236,3 +236,36 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.lifetime = ros::Duration(1);
   return marker;
 }
+
+visualization_msgs::Marker mark_direction(tf::Quaternion qt,int id, std::string f_id, std::string ns="direction_vector", float r=0.5, float g=0.5, float b=0.5)
+{
+  uint32_t shape = visualization_msgs::Marker::ARROW;
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = f_id;
+  marker.header.stamp = ros::Time::now();
+
+  marker.ns = ns;
+  marker.id = id;
+  marker.type = shape;
+  marker.action = visualization_msgs::Marker::ADD;
+
+  marker.pose.position.x = 0;
+  marker.pose.position.y = 0;
+  marker.pose.position.z = 0;
+
+  geometry_msgs::Quaternion qt_;
+  tf::quaternionTFToMsg(qt,qt_);
+  marker.pose.orientation = qt_;
+
+  marker.scale.x = 1;
+  marker.scale.y = 1;
+  marker.scale.z = 1;
+
+  marker.color.r = r;
+  marker.color.g = g;
+  marker.color.b = b;
+  marker.color.a = 0.5;
+
+  marker.lifetime = ros::Duration(1);
+  return marker;
+}
