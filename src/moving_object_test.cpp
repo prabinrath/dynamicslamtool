@@ -28,12 +28,13 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 		clock_t begin_time = clock();
 		tf::Transform t = (cb->ps).inverseTimes(ca->ps);
 
-    	pcl::PointCloud<pcl::PointXYZI> temp = *ca->cloud;
-	  	pcl_ros::transformPointCloud(temp,*ca->cloud,t);
+    	pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_t(new pcl::PointCloud<pcl::PointXYZI>),rotated_p(new pcl::PointCloud<pcl::PointXYZI>);
+		*keypoints_t = *ca->cloud;
+		pcl_ros::transformPointCloud(*keypoints_t,*ca->cloud,t);
 
-	  	ca->computeClusters(0.11,"single_cluster");
+		ca->computeClusters(0.11,"single_cluster");
 		cb->computeClusters(0.11,"single_cluster");
-		
+
 		pcl::toPCLPointCloud2(*ca->cluster_collection,*cloud);
 		pcl_conversions::fromPCL(*cloud, output);
 		output.header.frame_id = "previous";
@@ -48,17 +49,21 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 	  	//cluster correspondence methods (Global)
 	  	mth->calculateCorrespondenceCentroid(ca->centroid_collection,cb->centroid_collection,mp,0.1);
 	  	
+	  	tf::Transform rot;
+		rot.setIdentity();
+		rot.setRotation(t.getRotation());
+		pcl_ros::transformPointCloud(*keypoints_t,*rotated_p,rot);
+
 	  	//moving object detection methods (Local)
-	  	vector<double> param_vec = mth->getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
-	  	//vector<long> param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
+	  	vector<double> param_vec = mth->getDirectionCloudVariance(rotated_p,ca->cluster_indices,ca->clusters,cb->clusters,mp);
 
 	  	float rs=0.4,gs=0.6,bs=0.8,rd=0.8,gd=0.1,bd=0.4;int id = 1;
 	  	for(int j=0;j<mp->size();j++)
 		{
 			cout<<"{"<<(*mp)[j].index_query<<"->"<<(*mp)[j].index_match<<"} Fit Score: "<<(*mp)[j].distance<<" Moving_Score: "<<param_vec[id-1]<<endl;
-			//long threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/25;
-			double threshold = 0.1;
-			if(param_vec[id-1]>threshold)
+			//long threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/15;
+			double threshold = 200.0;
+			if(param_vec[id-1]>1 && param_vec[id-1]<threshold)
 			{
 				marker_pub.publish(mark_cluster(ca->clusters[(*mp)[j].index_query],id,"previous","bounding_box",rd,gd,bd));
 				marker_pub.publish(mark_cluster(cb->clusters[(*mp)[j].index_match],id,"current","bounding_box",rd,gd,bd));

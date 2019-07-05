@@ -2,6 +2,7 @@
 
 pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr CloudCorrespondence::tree = boost::shared_ptr<pcl::KdTreeFLANN<pcl::PointXYZI>>(new pcl::KdTreeFLANN<pcl::PointXYZI>);
 extern ros::Publisher pub,marker_pub;
+visualization_msgs::Marker mark_direction(double x,double y,double z,int id, string f_id, string ns, float r, float g, float b);
 
 void CloudCorrespondence::filterPassThrough(float x,float y,float z)
 {
@@ -210,7 +211,7 @@ vector<double> CloudCorrespondenceMethods::getDirectionCloudVariance(pcl::PointC
     for(int j=0;j<mp->size();j++)
     {
       pcl::PointCloud<pcl::PointXYZI>::Ptr upc(new pcl::PointCloud<pcl::PointXYZI>);
-      for (vector<int>::const_iterator pit = ci[j].indices.begin(); pit != ci[j].indices.end(); ++pit)
+      for (vector<int>::const_iterator pit = ci[(*mp)[j].index_query].indices.begin(); pit != ci[(*mp)[j].index_query].indices.end(); ++pit)
       {
         upc->points.push_back(src->points[*pit]);
       }
@@ -222,7 +223,7 @@ vector<double> CloudCorrespondenceMethods::getDirectionCloudVariance(pcl::PointC
 
       corr_est.setInputSource(c1[(*mp)[j].index_query]);
       corr_est.setInputTarget(c2[(*mp)[j].index_match]);
-      corr_est.determineCorrespondences(*corrs);
+      corr_est.determineReciprocalCorrespondences(*corrs);
 
       pcl::PointCloud<pcl::PointXYZ> dir_cloud;
       for(int i=0;i<corrs->size();i++)
@@ -242,16 +243,14 @@ vector<double> CloudCorrespondenceMethods::getDirectionCloudVariance(pcl::PointC
       Eigen::Matrix3f covariance_matrix;
       pcl::computeCovarianceMatrix(dir_cloud, cp, covariance_matrix);
 
-      cout<<covariance_matrix<<endl;
-
-      sensor_msgs::PointCloud2 output;
+      /*sensor_msgs::PointCloud2 output;
       pcl::PCLPointCloud2 *cloud = new pcl::PCLPointCloud2;
       pcl::toPCLPointCloud2(dir_cloud,*cloud);
       pcl_conversions::fromPCL(*cloud, output);
       output.header.frame_id = "direction";
       pub.publish(output);
-
-      sleep(1);
+      marker_pub.publish(mark_direction(cp(1),cp(2),cp(0),1,"direction","direction_vector",0,1,0));
+      sleep(1);*/
 
       directioncov.push_back(covariance_matrix(0,0)+covariance_matrix(1,1)+covariance_matrix(2,2));
     }
