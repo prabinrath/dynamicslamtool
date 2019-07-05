@@ -1,6 +1,7 @@
 #include "CC/CloudCorrespondence.h"
 
 pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr CloudCorrespondence::tree = boost::shared_ptr<pcl::KdTreeFLANN<pcl::PointXYZI>>(new pcl::KdTreeFLANN<pcl::PointXYZI>);
+extern ros::Publisher pub,marker_pub;
 
 void CloudCorrespondence::filterPassThrough(float x,float y,float z)
 {
@@ -22,8 +23,8 @@ void CloudCorrespondence::filterPassThrough(float x,float y,float z)
 bool CloudCorrespondence::cluster_condition(const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
 {
 	//very slow and useless
-  	std::vector<int> pointIdxRadiusSearch;
-  	std::vector<float> pointRadiusSquaredDistance;
+  	vector<int> pointIdxRadiusSearch;
+  	vector<float> pointRadiusSquaredDistance;
   	if ( tree->radiusSearch(point_b, 0.3, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
   	{
   		if(pointIdxRadiusSearch.size()>5)
@@ -36,6 +37,7 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
 {
 	clusters.clear();
 	cluster_indices.clear();
+  centroid_collection.reset(new pcl::PointCloud<pcl::PointXYZ>);
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
 	
   	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
@@ -55,10 +57,10 @@ void CloudCorrespondence::computeClusters(float distance_threshold, string f_id)
   	cec.segment(cluster_indices);
 	*/
 
-  	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+  	for (vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   	{
   		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>);
-	    for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
+	    for (vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
 	    {
 	    	cluster_collection->points.push_back(cloud->points[*pit]);
 	    	cloud_cluster->points.push_back(cloud->points[*pit]);
@@ -96,8 +98,8 @@ void CloudCorrespondenceMethods::calculateCorrespondenceCentroid(pcl::PointCloud
 
 bool CloudCorrespondenceMethods::densityConstraint(const pcl::PointXYZI& point_a,pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints,pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree,long threshold)
 {
-  	std::vector<int> pointIdxRadiusSearch;
-  	std::vector<float> pointRadiusSquaredDistance;
+  	vector<int> pointIdxRadiusSearch;
+  	vector<float> pointRadiusSquaredDistance;
   	tree->setInputCloud(keypoints);
   	if ( tree->radiusSearch(point_a, 0.2, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0 )
   	{
@@ -125,7 +127,7 @@ bool CloudCorrespondenceMethods::volumeConstraint(pcl::PointCloud<pcl::PointXYZI
   	return false;
 }
 
-vector<long> CloudCorrespondenceMethods::getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
+vector<long> CloudCorrespondenceMethods::getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
 {
   cout<<"\n ********* PC Change *********** \n";
   vector<long> changed;
@@ -146,14 +148,14 @@ vector<long> CloudCorrespondenceMethods::getClusterPointcloudChangeVector(vector
     octree_cd.setInputCloud(c2[(*mp)[j].index_match]);
     octree_cd.addPointsFromInputCloud();
     
-    std::vector<int> newPointIdxVector;
+    vector<int> newPointIdxVector;
     octree_cd.getPointIndicesFromNewVoxels(newPointIdxVector);
     changed.push_back(newPointIdxVector.size());
   }
   return changed;
 }
 
-vector<double> CloudCorrespondenceMethods::getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp)
+vector<double> CloudCorrespondenceMethods::getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp)
 {
   cout<<"\n ********* Distance Estimate *********** \n";
 	vector<double> estimates;
@@ -186,9 +188,79 @@ vector<double> CloudCorrespondenceMethods::getPointDistanceEstimateVector(vector
 	return estimates;
 }
 
+pcl::PointXYZ CloudCorrespondenceMethods::getDirectionVector(pcl::PointXYZI p1, pcl::PointXYZI p2)
+{
+  pcl::PointXYZ dir;
+  float x,y,z;
+  x = p2.x-p1.x;
+  y = p2.y-p1.y;
+  z = p2.z-p1.z;
+  dir.x = x/sqrt(x*x+y*y+z*z);
+  dir.y = y/sqrt(x*x+y*y+z*z);
+  dir.z = z/sqrt(x*x+y*y+z*z);
+  return dir;
+}
+
+vector<double> CloudCorrespondenceMethods::getDirectionCloudVariance(pcl::PointCloud<pcl::PointXYZI>::Ptr src,vector<pcl::PointIndices> &ci,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp)
+{
+    cout<<"\n ********* Direction Cloud Variance *********** \n";
+    vector<double> directioncov;
+    pcl::CorrespondencesPtr corrs(new pcl::Correspondences ());
+    pcl::registration::CorrespondenceEstimation<pcl::PointXYZI, pcl::PointXYZI> corr_est;
+    for(int j=0;j<mp->size();j++)
+    {
+      pcl::PointCloud<pcl::PointXYZI>::Ptr upc(new pcl::PointCloud<pcl::PointXYZI>);
+      for (vector<int>::const_iterator pit = ci[j].indices.begin(); pit != ci[j].indices.end(); ++pit)
+      {
+        upc->points.push_back(src->points[*pit]);
+      }
+      if(!volumeConstraint(upc,c2[(*mp)[j].index_match],0.5))
+      {
+        cout<<"Cluster Skipped!\n";
+        continue;
+      }
+
+      corr_est.setInputSource(c1[(*mp)[j].index_query]);
+      corr_est.setInputTarget(c2[(*mp)[j].index_match]);
+      corr_est.determineCorrespondences(*corrs);
+
+      pcl::PointCloud<pcl::PointXYZ> dir_cloud;
+      for(int i=0;i<corrs->size();i++)
+      {
+        if((*corrs)[i].distance<0.01)
+        {
+          pcl::PointXYZ dir = getDirectionVector(upc->points[(*corrs)[i].index_query],c2[(*mp)[j].index_match]->points[(*corrs)[i].index_match]); 
+          dir_cloud.points.push_back(dir);
+        }
+      }
+      dir_cloud.width = dir_cloud.points.size();
+      dir_cloud.height = 1;
+      dir_cloud.is_dense = true;
+
+      Eigen::Vector4f cp;
+      pcl::compute3DCentroid(dir_cloud, cp);
+      Eigen::Matrix3f covariance_matrix;
+      pcl::computeCovarianceMatrix(dir_cloud, cp, covariance_matrix);
+
+      cout<<covariance_matrix<<endl;
+
+      sensor_msgs::PointCloud2 output;
+      pcl::PCLPointCloud2 *cloud = new pcl::PCLPointCloud2;
+      pcl::toPCLPointCloud2(dir_cloud,*cloud);
+      pcl_conversions::fromPCL(*cloud, output);
+      output.header.frame_id = "direction";
+      pub.publish(output);
+
+      sleep(1);
+
+      directioncov.push_back(covariance_matrix(0,0)+covariance_matrix(1,1)+covariance_matrix(2,2));
+    }
+    return directioncov;
+}
+
 ////////////////////////////////////////////////////////////////////Helping Methods
 
-visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
+visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, string f_id, string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
 {
   Eigen::Vector4f centroid;
   Eigen::Vector4f min;
@@ -237,9 +309,9 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   return marker;
 }
 
-visualization_msgs::Marker mark_direction(tf::Quaternion qt,int id, std::string f_id, std::string ns="direction_vector", float r=0.5, float g=0.5, float b=0.5)
+visualization_msgs::Marker mark_direction(double x,double y,double z,int id, string f_id, string ns="direction_vector", float r=0.5, float g=0.5, float b=0.5)
 {
-  uint32_t shape = visualization_msgs::Marker::ARROW;
+  uint32_t shape = visualization_msgs::Marker::LINE_STRIP;
   visualization_msgs::Marker marker;
   marker.header.frame_id = f_id;
   marker.header.stamp = ros::Time::now();
@@ -249,22 +321,27 @@ visualization_msgs::Marker mark_direction(tf::Quaternion qt,int id, std::string 
   marker.type = shape;
   marker.action = visualization_msgs::Marker::ADD;
 
-  marker.pose.position.x = 0;
-  marker.pose.position.y = 0;
-  marker.pose.position.z = 0;
+  marker.pose.orientation.x = 1;
+  marker.pose.orientation.y = 1;
+  marker.pose.orientation.z = 1;
+  marker.pose.orientation.w = 1;
 
-  geometry_msgs::Quaternion qt_;
-  tf::quaternionTFToMsg(qt,qt_);
-  marker.pose.orientation = qt_;
+  geometry_msgs::Point p;
+  p.x = 0;
+  p.y = 0;
+  p.z = 0;
+  marker.points.push_back(p);
+  p.x = x;
+  p.y = y;
+  p.z = z;
+  marker.points.push_back(p);
 
-  marker.scale.x = 1;
-  marker.scale.y = 1;
-  marker.scale.z = 1;
-
+  marker.scale.x = 0.04;
+  
   marker.color.r = r;
   marker.color.g = g;
   marker.color.b = b;
-  marker.color.a = 0.5;
+  marker.color.a = 0.8;
 
   marker.lifetime = ros::Duration(1);
   return marker;

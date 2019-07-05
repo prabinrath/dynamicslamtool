@@ -20,6 +20,7 @@
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/common/common.h>
+#include <pcl/common/pca.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_ros/transforms.h>

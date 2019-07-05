@@ -75,7 +75,7 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 0
+      Max Intensity: 121
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: PointCloud2
@@ -83,7 +83,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.100000001
+      Size (m): 0.00999999978
       Style: Flat Squares
       Topic: output
       Unreliable: false
@@ -151,5 +151,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1200
-  X: -184
+  X: 65
   Y: 24
