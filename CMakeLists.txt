@@ -22,8 +22,8 @@ catkin_package()
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_library(cluster_correspondence2 src/CloudCorrespondence.cpp include/CC/CloudCorrespondence.h include/CC/IncludeAll.h include/dtw/dtw.h)
-target_link_libraries(cluster_correspondence2 ${catkin_LIBRARIES}) #${PCL_LIBRARIES}
+add_library(mod_lib src/MovingObjectDetection.cpp include/MOD/MovingObjectDetection.h include/MOD/IncludeAll.h)
+target_link_libraries(mod_lib ${catkin_LIBRARIES}) #${PCL_LIBRARIES}
 
 add_executable(mov src/moving_object_test.cpp)
-target_link_libraries(mov cluster_correspondence2)
+target_link_libraries(mov mod_lib)

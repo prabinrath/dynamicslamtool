@@ -10,21 +10,16 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/segmentation/extract_clusters.h>
-#include <pcl/segmentation/conditional_euclidean_clustering.h>
 #include <pcl/kdtree/kdtree.h>
-#include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <visualization_msgs/Marker.h>
-#include <pcl/features/normal_3d_omp.h>
-#include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/common/common.h>
-#include <pcl/common/pca.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_ros/transforms.h>
 #include <tf/transform_datatypes.h>
 #include <flann/flann.h>
 #include <iostream>
-#include <dtw/dtw.h>
+#include <string>
+#include <ctime>
+using namespace std;
