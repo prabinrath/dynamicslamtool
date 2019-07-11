@@ -22,7 +22,7 @@ catkin_package()
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_library(mod_lib src/MovingObjectDetection.cpp include/MOD/MovingObjectDetection.h include/MOD/IncludeAll.h)
+add_library(mod_lib src/MovingObjectRemoval.cpp include/MOR/MovingObjectRemoval.h include/MOR/IncludeAll.h)
 target_link_libraries(mod_lib ${catkin_LIBRARIES}) #${PCL_LIBRARIES}
 
 add_executable(mov src/moving_object_test.cpp)
