@@ -6,9 +6,19 @@ boost::shared_ptr<MovingObjectRemoval> mor;
 
 void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm)
 {
+	clock_t begin_time = clock();
+
 	pcl::PCLPointCloud2 cloud;
 	pcl_conversions::toPCL(*input, cloud);
+
 	mor->pushRawCloudAndPose(cloud,odm->pose.pose);
+	if(mor->filterCloud("filtered"))
+	{
+		pub.publish(mor->output);
+	}
+
+	cout<<"-----------------------------------------------------\n";
+    cout<<1000.0*(clock()-begin_time)/CLOCKS_PER_SEC<<endl;
 }
 
 int main (int argc, char** argv)
@@ -24,7 +34,7 @@ int main (int argc, char** argv)
   message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), pc_sub, odom_sub);
   sync.registerCallback(boost::bind(&moving_object_test, _1, _2));
 
-  mor.reset(new MovingObjectRemoval(3,4));
+  mor.reset(new MovingObjectRemoval(3,2));
 
   ros::spin();
 }

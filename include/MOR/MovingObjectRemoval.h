@@ -9,7 +9,6 @@ struct MovingObjectDetectionCloud
 	pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_collection;
 	vector<pcl::PointIndices> cluster_indices;
 	vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
-	static pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree;
 	vector<bool> detection_results;
 	tf::Pose ps;
 	bool init;
@@ -41,23 +40,26 @@ struct MOCentroid
 	int confidence,max_confidence;
 
 	MOCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good),max_confidence(n_good){}
-	bool decreaseConfidence(){confidence--;if(confidence==0){return false;}return true;}
+	bool decreaseConfidence(){confidence--;if(confidence==0){return true;}return false;}
 	void increaseConfidence(){if(confidence<max_confidence){confidence++;}}
 };
 
 class MovingObjectRemoval
 {
 	vector<MOCentroid> mo_vec;
-	vector<pcl::CorrespondencesPtr> corrs_vec;
-	vector<vector<bool>> res_vec;
+	deque<pcl::CorrespondencesPtr> corrs_vec;
+	deque<vector<bool>> res_vec;
 	boost::shared_ptr<MovingObjectDetectionCloud> ca,cb;
 	boost::shared_ptr<MovingObjectDetectionMethods> mth;
 	int moving_confidence,static_confidence;
-	sensor_msgs::PointCloud2 output;
+	pcl::KdTreeFLANN<pcl::PointXYZ> tree;
 
-	bool recurseFindClusterChain(int col,int track);
-	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,vector<int> res_ca,vector<int> res_cb);
+	int recurseFindClusterChain(int col,int track);
+	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,vector<bool> &res_ca,vector<bool> &res_cb);
+	void pushCentroid(pcl::PointXYZ pt);
 	public:
+		sensor_msgs::PointCloud2 output;
 		MovingObjectRemoval(int n_bad,int n_good);
 		void pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometry_msgs::Pose pose);
+		bool filterCloud(string f_id);
 };
