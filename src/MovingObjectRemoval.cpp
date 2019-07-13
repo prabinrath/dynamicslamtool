@@ -100,7 +100,6 @@ void MovingObjectDetectionMethods::calculateCorrespondenceCentroid(vector<pcl::P
   	{
 	    if(!volumeConstraint(c1[(*ufmp)[j].index_query],c2[(*ufmp)[j].index_match],0.3))
 	    {
-	      cout<<"Cluster Skipped!\n";
 	      continue;
 	    }
 
@@ -110,7 +109,7 @@ void MovingObjectDetectionMethods::calculateCorrespondenceCentroid(vector<pcl::P
 
 vector<long> MovingObjectDetectionMethods::getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
 {
-  cout<<"\n ********* PC Change *********** \n";
+  //cout<<"\n ********* PC Change *********** \n";
   vector<long> changed;
   srand((unsigned int)time(NULL));
   for(int j=0;j<mp->size();j++)
@@ -202,7 +201,7 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5;
 
-  marker.lifetime = ros::Duration(1);
+  marker.lifetime = ros::Duration(0.2);
   return marker;
 }
 
@@ -210,7 +209,7 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
 
 MovingObjectRemoval::MovingObjectRemoval(int n_bad,int n_good)
 {
-    moving_confidence = n_bad;
+    moving_confidence = n_bad+1;
     static_confidence = n_good;
 
     ca.reset(new MovingObjectDetectionCloud());
@@ -253,7 +252,7 @@ void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
 		}
 	}
 
-	MOCentroid moc(pt,static_confidence);
+	MovingObjectCentroid moc(pt,static_confidence);
 	mo_vec.push_back(moc);
 }
 
@@ -267,6 +266,7 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,vec
   res_vec.push_back(res_ca);
   res_vec.push_back(res_cb);
   
+  cout<<mo_vec.size()<<" "<<corrs_vec.size()<<" "<<res_vec.size()<<endl;
   if(res_vec.size()%moving_confidence==0)
   {
     for(int i=0;i<res_vec[0].size();i++)
@@ -328,25 +328,21 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 	//vector<double> param_vec = mth->getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
 	vector<long> param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
 
-	float rs=0.4,gs=0.6,bs=0.8,rd=0.8,gd=0.1,bd=0.4;int id = 1;
 	for(int j=0;j<mp->size();j++)
 	{
-		//cout<<"{"<<(*mp)[j].index_query<<"->"<<(*mp)[j].index_match<<"} Fit Score: "<<(*mp)[j].distance<<" Moving_Score: "<<param_vec[id-1]<<endl;
+		//cout<<"{"<<(*mp)[j].index_query<<"->"<<(*mp)[j].index_match<<"} Fit Score: "<<(*mp)[j].distance<<" Moving_Score: "<<param_vec[j]<<endl;
 		long threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/25;
 		//double threshold = 0.15;
-		if(param_vec[id-1]>threshold)
+		if(param_vec[j]>threshold)
 		{
-			marker_pub.publish(mark_cluster(ca->clusters[(*mp)[j].index_query],id,"previous","bounding_box",rd,gd,bd));
-			marker_pub.publish(mark_cluster(cb->clusters[(*mp)[j].index_match],id,"current","bounding_box",rd,gd,bd));
 			ca->detection_results[(*mp)[j].index_query] = true;
 			cb->detection_results[(*mp)[j].index_match] = true;
 		}
 		else
 		{
-			marker_pub.publish(mark_cluster(ca->clusters[(*mp)[j].index_query],id,"previous","bounding_box",rs,gs,bs));
-			marker_pub.publish(mark_cluster(cb->clusters[(*mp)[j].index_match],id,"current","bounding_box",rs,gs,bs));
+			ca->detection_results[(*mp)[j].index_query] = false;
+			cb->detection_results[(*mp)[j].index_match] = false;
 		}
-		id++;
 	}
 	checkMovingClusterChain(mp,ca->detection_results,cb->detection_results);
   }
@@ -355,13 +351,15 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 bool MovingObjectRemoval::filterCloud(string f_id)
 {
 	tree.setInputCloud(cb->centroid_collection);
+	float rd=0.8,gd=0.1,bd=0.4;int id = 1;
 	for(int i=0;i<mo_vec.size();i++)
 	{
 		vector<int> pointIdxNKNSearch(1);
 		vector<float> pointNKNSquaredDistance(1);
 		if(tree.nearestKSearch(mo_vec[i].centroid, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
 		{
-			//TODO:publish markers for visualization of moving clusters
+			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,"current","bounding_box",rd,gd,bd));
+			
 			//TODO:remove cluster from cloud and put the filtered cloud to the output variable
 
 			if(cb->detection_results[pointIdxNKNSearch[0]] == false)
@@ -377,8 +375,8 @@ bool MovingObjectRemoval::filterCloud(string f_id)
 				mo_vec[i].centroid = cb->centroid_collection->points[pointIdxNKNSearch[0]];
 				mo_vec[i].increaseConfidence();
 			}
+			id++;
 		}
 	}
-	cout<<mo_vec.size()<<" "<<corrs_vec.size()<<" "<<res_vec.size()<<endl;
 	return false;
 }

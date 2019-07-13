@@ -27,26 +27,26 @@ struct MovingObjectDetectionCloud
 
 class MovingObjectDetectionMethods
 {
-	bool volumeConstraint(pcl::PointCloud<pcl::PointXYZI>::Ptr fp, pcl::PointCloud<pcl::PointXYZI>::Ptr fc,double threshold);
 	public:
+		bool volumeConstraint(pcl::PointCloud<pcl::PointXYZI>::Ptr fp, pcl::PointCloud<pcl::PointXYZI>::Ptr fc,double threshold);
 		void calculateCorrespondenceCentroid(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta);
 		vector<double> getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp);
 		vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp,float resolution);
 };
 
-struct MOCentroid
+struct MovingObjectCentroid
 {
 	pcl::PointXYZ centroid;
 	int confidence,max_confidence;
 
-	MOCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good),max_confidence(n_good){}
+	MovingObjectCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good),max_confidence(n_good){}
 	bool decreaseConfidence(){confidence--;if(confidence==0){return true;}return false;}
 	void increaseConfidence(){if(confidence<max_confidence){confidence++;}}
 };
 
 class MovingObjectRemoval
 {
-	vector<MOCentroid> mo_vec;
+	vector<MovingObjectCentroid> mo_vec;
 	deque<pcl::CorrespondencesPtr> corrs_vec;
 	deque<vector<bool>> res_vec;
 	boost::shared_ptr<MovingObjectDetectionCloud> ca,cb;
