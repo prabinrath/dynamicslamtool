@@ -6,6 +6,7 @@
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl/filters/voxel_grid_covariance.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/sample_consensus/method_types.h>
@@ -18,6 +19,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <ctime>
+#include <unordered_map>
 #include <string>
 
 ros::Publisher pub,marker_pub;
@@ -155,30 +157,30 @@ void groundPlaneRemoval(const sensor_msgs::PointCloud2ConstPtr &input)
     pcl::fromPCLPointCloud2(*cloud, *ca);
     cb.reset(new pcl::PointCloud<pcl::PointXYZI>);
 
-    pcl::PointCloud<pcl::PointXYZI> dsc;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr dsc(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::VoxelGrid<pcl::PointXYZI> vg;
     vg.setInputCloud(ca);
     vg.setLeafSize(0.1,0.1,0.1);
-    vg.filter(dsc);
+    vg.filter(*dsc);
 
     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr tree(new pcl::KdTreeFLANN<pcl::PointXYZI>);
     tree->setInputCloud(ca);
-    Eigen::Vector4f min,max;
-    pcl::getMinMax3D(dsc, min, max);
 
-    for(int i=0;i<dsc.points.size();i++)
+    std::vector<std::vector<int>> index_bank;
+    for(int i=0;i<dsc->points.size();i++)
     {
       std::vector<int> ind;
       std::vector<float> dist;
-
-      if(tree->radiusSearch(dsc.points[i], 0.1, ind, dist) > 0 )
-      //if(tree->nearestKSearch(dsc.points[i], 20, ind, dist) > 0 )
+      if(tree->radiusSearch(dsc->points[i], 0.1, ind, dist) > 0 )
+      //if(tree->nearestKSearch(dsc->points[i], 20, ind, dist) > 0 )
       {
-        if(ind.size()>10)
+        if(ind.size()>3)
         {
           pcl::PointCloud<pcl::PointXYZI> temp;
           for(int j=0;j<ind.size();j++)
+          {
             temp.points.push_back(ca->points[ind[j]]);
+          }
           temp.width = temp.points.size();
           temp.height = 1;
 
@@ -186,20 +188,57 @@ void groundPlaneRemoval(const sensor_msgs::PointCloud2ConstPtr &input)
           pcl::compute3DCentroid(temp, cp);
           Eigen::Matrix3f covariance_matrix;
           pcl::computeCovarianceMatrix(temp, cp, covariance_matrix);
-          if(fabs(covariance_matrix(0,2))<0.001 && fabs(covariance_matrix(1,2))<0.001 && fabs(covariance_matrix(2,2))<0.001 && fabs(min[2]-dsc.points[i].z)<0.1)
+          if(fabs(covariance_matrix(0,2))<0.001 && fabs(covariance_matrix(1,2))<0.001 && fabs(covariance_matrix(2,2))<0.001)
           {
-            std::cout<<covariance_matrix<<std::endl<<std::endl;
-            cb->points.push_back(dsc.points[i]);
+            cb->points.push_back(dsc->points[i]);
+            index_bank.push_back(ind);
           }
         }
       }
     }
+
+    std::unordered_map<float,std::vector<int>> bins;
+    for(int i=0;i<cb->points.size();i++)
+    {
+      float key = (float)((int)(cb->points[i].z*10))/10;
+      bins[key].push_back(i);
+    }
+    cb.reset(new pcl::PointCloud<pcl::PointXYZI>);
+    float tracked_key = bins.begin()->first;
+    int mode = bins.begin()->second.size();
+    for(std::unordered_map<float,std::vector<int>>::iterator it=bins.begin();it!=bins.end();it++)
+    {
+      if(it->second.size()>mode)
+      {
+        mode = it->second.size();
+        tracked_key = it->first;
+      }
+    }
+    pcl::PointIndicesPtr ground_plane(new pcl::PointIndices);
+    for(int i=0;i<bins[tracked_key].size();i++)
+    {
+      for(int j=0;j<index_bank[bins[tracked_key][i]].size();j++)
+      {
+        ground_plane->indices.push_back(index_bank[bins[tracked_key][i]][j]);
+      }
+    }
+
+    pcl::ExtractIndices<pcl::PointXYZI> extract;
+    extract.setInputCloud(ca);
+    extract.setIndices(ground_plane);
+    extract.setNegative(false);
+    extract.filter(*cb);
 
     cb->width = cb->points.size();
     cb->height = 1;
     pcl::toPCLPointCloud2(*cb,*cloud);
     pcl_conversions::fromPCL(*cloud, output);
     output.header.frame_id = "/current";
+    pub.publish(output);
+
+    pcl::toPCLPointCloud2(*ca,*cloud);
+    pcl_conversions::fromPCL(*cloud, output);
+    output.header.frame_id = "/previous";
     pub.publish(output);
 }
 
