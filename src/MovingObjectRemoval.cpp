@@ -4,7 +4,7 @@ extern ros::Publisher pub,marker_pub;
 
 void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
 {
-	pcl::PassThrough<pcl::PointXYZI> pass;
+	  pcl::PassThrough<pcl::PointXYZI> pass;
   	pass.setInputCloud(cloud);
   	pass.setFilterFieldName("x");
   	pass.setFilterLimits(-x, x);
@@ -17,6 +17,84 @@ void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
   	pass.setFilterFieldName("z");
   	pass.setFilterLimits(-0.5, z);
   	pass.filter(*cloud);
+}
+
+void MovingObjectDetectionCloud::groundPlaneRemoval()
+{
+    pcl::PointCloud<pcl::PointXYZI>::Ptr dsc(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr f_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::VoxelGrid<pcl::PointXYZI> vg;
+    vg.setInputCloud(cloud);
+    vg.setLeafSize(0.1,0.1,0.1);
+    vg.filter(*dsc);
+
+    pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr xyzi_tree(new pcl::KdTreeFLANN<pcl::PointXYZI>);
+    xyzi_tree->setInputCloud(cloud);
+
+    std::vector<std::vector<int>> index_bank;
+    for(int i=0;i<dsc->points.size();i++)
+    {
+      std::vector<int> ind;
+      std::vector<float> dist;
+      if(xyzi_tree->radiusSearch(dsc->points[i], 0.1, ind, dist) > 0 )
+      //if(xyzi_tree->nearestKSearch(dsc->points[i], 20, ind, dist) > 0 )
+      {
+        if(ind.size()>3)
+        {
+          pcl::PointCloud<pcl::PointXYZI> temp;
+          for(int j=0;j<ind.size();j++)
+          {
+            temp.points.push_back(cloud->points[ind[j]]);
+          }
+          temp.width = temp.points.size();
+          temp.height = 1;
+
+          Eigen::Vector4f cp;
+          pcl::compute3DCentroid(temp, cp);
+          Eigen::Matrix3f covariance_matrix;
+          pcl::computeCovarianceMatrix(temp, cp, covariance_matrix);
+          if(fabs(covariance_matrix(0,2))<0.001 && fabs(covariance_matrix(1,2))<0.001 && fabs(covariance_matrix(2,2))<0.001)
+          {
+            f_cloud->points.push_back(dsc->points[i]);
+            index_bank.push_back(ind);
+          }
+        }
+      }
+    }
+
+    std::unordered_map<float,std::vector<int>> bins;
+    for(int i=0;i<f_cloud->points.size();i++)
+    {
+      float key = (float)((int)(f_cloud->points[i].z*10))/10;
+      bins[key].push_back(i);
+    }
+    float tracked_key = bins.begin()->first;
+    int mode = bins.begin()->second.size();
+    for(std::unordered_map<float,std::vector<int>>::iterator it=bins.begin();it!=bins.end();it++)
+    {
+      if(it->second.size()>mode)
+      {
+        mode = it->second.size();
+        tracked_key = it->first;
+      }
+    }
+    pcl::PointIndicesPtr ground_plane(new pcl::PointIndices);
+    for(int i=0;i<bins[tracked_key].size();i++)
+    {
+      for(int j=0;j<index_bank[bins[tracked_key][i]].size();j++)
+      {
+        ground_plane->indices.push_back(index_bank[bins[tracked_key][i]][j]);
+      }
+    }
+
+    f_cloud.reset(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::ExtractIndices<pcl::PointXYZI> extract;
+    extract.setInputCloud(cloud);
+    extract.setIndices(ground_plane);
+    extract.setNegative(true);
+    extract.filter(*f_cloud);
+
+    cloud=f_cloud;
 }
 
 void MovingObjectDetectionCloud::computeClusters(float distance_threshold, string f_id)
@@ -294,6 +372,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 
   tf::poseMsgToTF(pose,cb->ps);
   cb->groundPlaneRemoval(4.0,4.0,5.0);
+  //cb->groundPlaneRemoval();
   cb->computeClusters(0.11,"single_cluster");
   cb->init = true;
 
@@ -350,19 +429,19 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 
 bool MovingObjectRemoval::filterCloud(string f_id)
 {
-	tree.setInputCloud(cb->centroid_collection);
+	xyz_tree.setInputCloud(cb->centroid_collection);
 	float rd=0.8,gd=0.1,bd=0.4;int id = 1;
 	for(int i=0;i<mo_vec.size();i++)
 	{
 		vector<int> pointIdxNKNSearch(1);
 		vector<float> pointNKNSquaredDistance(1);
-		if(tree.nearestKSearch(mo_vec[i].centroid, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
+		if(xyz_tree.nearestKSearch(mo_vec[i].centroid, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
 		{
 			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,"current","bounding_box",rd,gd,bd));
 			
 			//TODO:remove cluster from cloud and put the filtered cloud to the output variable
 
-			if(cb->detection_results[pointIdxNKNSearch[0]] == false)
+			if(cb->detection_results[pointIdxNKNSearch[0]] == false || pointNKNSquaredDistance[0]>0.5)
 			{
 				if(mo_vec[i].decreaseConfidence())
 				{

@@ -21,8 +21,8 @@ struct MovingObjectDetectionCloud
 		init = false;
 	}
 	void groundPlaneRemoval(float,float,float);
+	void groundPlaneRemoval();
 	void computeClusters(float,string);
-	static bool cluster_condition(const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance);
 };
 
 class MovingObjectDetectionMethods
@@ -52,7 +52,7 @@ class MovingObjectRemoval
 	boost::shared_ptr<MovingObjectDetectionCloud> ca,cb;
 	boost::shared_ptr<MovingObjectDetectionMethods> mth;
 	int moving_confidence,static_confidence;
-	pcl::KdTreeFLANN<pcl::PointXYZ> tree;
+	pcl::KdTreeFLANN<pcl::PointXYZ> xyz_tree;
 
 	int recurseFindClusterChain(int col,int track);
 	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,vector<bool> &res_ca,vector<bool> &res_cb);

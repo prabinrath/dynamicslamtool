@@ -13,6 +13,8 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/filters/voxel_grid.h>
 #include <visualization_msgs/Marker.h>
 #include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
@@ -21,6 +23,8 @@
 #include <tf/transform_datatypes.h>
 #include <flann/flann.h>
 #include <iostream>
+#include <unordered_map>
 #include <string>
 #include <ctime>
+
 using namespace std;
