@@ -389,13 +389,13 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 	  	pcl_ros::transformPointCloud(temp,*ca->clusters[i],t);
 	}
 
-	pcl::toPCLPointCloud2(*ca->cluster_collection,cloud);
-	pcl_conversions::fromPCL(cloud, output);
-	output.header.frame_id = "previous";
-	pub.publish(output);
+	//pcl::toPCLPointCloud2(*ca->cluster_collection,cloud);
+	//pcl_conversions::fromPCL(cloud, output);
+	//output.header.frame_id = "previous";
+	//pub.publish(output);
 	pcl::toPCLPointCloud2(*cb->cluster_collection,cloud);
 	pcl_conversions::fromPCL(cloud, output);
-	output.header.frame_id = "current";
+	output.header.frame_id = "/current";
 	pub.publish(output);
   		
 	pcl::CorrespondencesPtr mp(new pcl::Correspondences());
@@ -431,15 +431,19 @@ bool MovingObjectRemoval::filterCloud(string f_id)
 {
 	xyz_tree.setInputCloud(cb->centroid_collection);
 	float rd=0.8,gd=0.1,bd=0.4;int id = 1;
+  pcl::PointIndicesPtr moving_points(new pcl::PointIndices);
 	for(int i=0;i<mo_vec.size();i++)
 	{
 		vector<int> pointIdxNKNSearch(1);
 		vector<float> pointNKNSquaredDistance(1);
 		if(xyz_tree.nearestKSearch(mo_vec[i].centroid, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
 		{
-			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,"current","bounding_box",rd,gd,bd));
+			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,"/current","bounding_box",rd,gd,bd));
 			
-			//TODO:remove cluster from cloud and put the filtered cloud to the output variable
+      for(int j=0;j<cb->cluster_indices[pointIdxNKNSearch[0]].indices.size();j++)
+      {
+        moving_points->indices.push_back(cb->cluster_indices[pointIdxNKNSearch[0]].indices[j]);
+      }
 
 			if(cb->detection_results[pointIdxNKNSearch[0]] == false || pointNKNSquaredDistance[0]>0.5)
 			{
@@ -457,5 +461,17 @@ bool MovingObjectRemoval::filterCloud(string f_id)
 			id++;
 		}
 	}
+
+  /*pcl::PointCloud<pcl::PointXYZI>::Ptr f_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::ExtractIndices<pcl::PointXYZI> extract;
+  extract.setInputCloud(cb->cloud);
+  extract.setIndices(moving_points);
+  extract.setNegative(true);
+  extract.filter(*f_cloud);
+
+  pcl::toPCLPointCloud2(*f_cloud,cloud);
+  pcl_conversions::fromPCL(cloud, output);
+  output.header.frame_id = "/current";*/
+
 	return false;
 }
