@@ -1,6 +1,57 @@
 #include "MOR/MovingObjectRemoval.h"
 
-extern ros::Publisher pub,marker_pub;
+////////////////////////////////////////////////////////////////////Helping Methods
+
+visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, std::string f_id, std::string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
+{
+  Eigen::Vector4f centroid;
+  Eigen::Vector4f min;
+  Eigen::Vector4f max;
+
+  pcl::compute3DCentroid(*cloud_cluster, centroid);
+  pcl::getMinMax3D(*cloud_cluster, min, max);
+
+  uint32_t shape = visualization_msgs::Marker::CUBE;
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = f_id;
+  marker.header.stamp = ros::Time::now();
+
+  marker.ns = ns;
+  marker.id = id;
+  marker.type = shape;
+  marker.action = visualization_msgs::Marker::ADD;
+
+  marker.pose.position.x = centroid[0];
+  marker.pose.position.y = centroid[1];
+  marker.pose.position.z = centroid[2];
+  marker.pose.orientation.x = 0.0;
+  marker.pose.orientation.y = 0.0;
+  marker.pose.orientation.z = 0.0;
+  marker.pose.orientation.w = 1.0;
+
+  marker.scale.x = (max[0]-min[0]);
+  marker.scale.y = (max[1]-min[1]);
+  marker.scale.z = (max[2]-min[2]);
+
+  if (marker.scale.x ==0)
+      marker.scale.x=0.1;
+
+  if (marker.scale.y ==0)
+    marker.scale.y=0.1;
+
+  if (marker.scale.z ==0)
+    marker.scale.z=0.1;
+
+  marker.color.r = r;
+  marker.color.g = g;
+  marker.color.b = b;
+  marker.color.a = 0.5;
+
+  marker.lifetime = ros::Duration(0.2);
+  return marker;
+}
+
+////////////////////////////////////////////////////////////////////////
 
 void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
 {
@@ -97,14 +148,16 @@ void MovingObjectDetectionCloud::groundPlaneRemoval()
     cloud=f_cloud;
 }
 
-void MovingObjectDetectionCloud::computeClusters(float distance_threshold, string f_id)
+void MovingObjectDetectionCloud::computeClusters(float distance_threshold, std::string f_id)
 {
 	clusters.clear();
 	cluster_indices.clear();
 	detection_results.clear();
-  	centroid_collection.reset(new pcl::PointCloud<pcl::PointXYZ>);
+  centroid_collection.reset(new pcl::PointCloud<pcl::PointXYZ>);
+  #ifdef VISUALIZE
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
-	
+	#endif
+
   	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
   	ec.setClusterTolerance(distance_threshold);
   	ec.setMinClusterSize(200);
@@ -112,12 +165,14 @@ void MovingObjectDetectionCloud::computeClusters(float distance_threshold, strin
   	ec.setInputCloud(cloud);
   	ec.extract(cluster_indices);
 	
-  	for (vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+  	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   	{
   		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>);
-	    for (vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
+	    for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
 	    {
+        #ifdef VISUALIZE
 	    	cluster_collection->points.push_back(cloud->points[*pit]);
+        #endif
 	    	cloud_cluster->points.push_back(cloud->points[*pit]);
 	    }
 
@@ -142,14 +197,16 @@ void MovingObjectDetectionCloud::computeClusters(float distance_threshold, strin
   	centroid_collection->width = centroid_collection->points.size();
 	centroid_collection->height = 1;
 	centroid_collection->is_dense = true;
-  	cluster_collection->width = cluster_collection->points.size();
+  #ifdef VISUALIZE
+  cluster_collection->width = cluster_collection->points.size();
 	cluster_collection->height = 1;
 	cluster_collection->is_dense = true;
+  #endif
 }
 
 bool MovingObjectDetectionMethods::volumeConstraint(pcl::PointCloud<pcl::PointXYZI>::Ptr fp, pcl::PointCloud<pcl::PointXYZI>::Ptr fc,double threshold)
 {
-	Eigen::Vector4f min;
+    Eigen::Vector4f min;
   	Eigen::Vector4f max;
   	double volp,volc;
 
@@ -165,13 +222,13 @@ bool MovingObjectDetectionMethods::volumeConstraint(pcl::PointCloud<pcl::PointXY
   	return false;
 }
 
-void MovingObjectDetectionMethods::calculateCorrespondenceCentroid(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr fmp,double delta)
+void MovingObjectDetectionMethods::calculateCorrespondenceCentroid(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr fmp,double delta)
 {
 	pcl::CorrespondencesPtr ufmp(new pcl::Correspondences());
 
 	pcl::registration::CorrespondenceEstimation<pcl::PointXYZ, pcl::PointXYZ> corr_est;
-  	corr_est.setInputSource(fp);
-  	corr_est.setInputTarget(fc);
+  corr_est.setInputSource(fp);
+  corr_est.setInputTarget(fc);
 	corr_est.determineReciprocalCorrespondences(*ufmp);
 
 	for(int j=0;j<ufmp->size();j++)
@@ -185,10 +242,9 @@ void MovingObjectDetectionMethods::calculateCorrespondenceCentroid(vector<pcl::P
   	}
 }
 
-vector<long> MovingObjectDetectionMethods::getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
+std::vector<long> MovingObjectDetectionMethods::getClusterPointcloudChangeVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
 {
-  //cout<<"\n ********* PC Change *********** \n";
-  vector<long> changed;
+  std::vector<long> changed;
   srand((unsigned int)time(NULL));
   for(int j=0;j<mp->size();j++)
   {
@@ -199,24 +255,23 @@ vector<long> MovingObjectDetectionMethods::getClusterPointcloudChangeVector(vect
     octree_cd.setInputCloud(c2[(*mp)[j].index_match]);
     octree_cd.addPointsFromInputCloud();
     
-    vector<int> newPointIdxVector;
+    std::vector<int> newPointIdxVector;
     octree_cd.getPointIndicesFromNewVoxels(newPointIdxVector);
     changed.push_back(newPointIdxVector.size());
   }
   return changed;
 }
 
-vector<double> MovingObjectDetectionMethods::getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp)
+std::vector<double> MovingObjectDetectionMethods::getPointDistanceEstimateVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp)
 {
-  	cout<<"\n ********* Distance Estimate *********** \n";
-	vector<double> estimates;
+	std::vector<double> estimates;
  	pcl::registration::CorrespondenceEstimation<pcl::PointXYZI, pcl::PointXYZI> corr_est;
-  	pcl::CorrespondencesPtr corrs;    
+  pcl::CorrespondencesPtr corrs;    
 	for(int j=0;j<mp->size();j++)
 	{
 		corrs.reset(new pcl::Correspondences());
-  		corr_est.setInputSource(c1[(*mp)[j].index_query]);
-  		corr_est.setInputTarget(c2[(*mp)[j].index_match]);
+    corr_est.setInputSource(c1[(*mp)[j].index_query]);
+  	corr_est.setInputTarget(c2[(*mp)[j].index_match]);
 
 		corr_est.determineCorrespondences(*corrs);
 		double count = 0;
@@ -232,67 +287,44 @@ vector<double> MovingObjectDetectionMethods::getPointDistanceEstimateVector(vect
 	return estimates;
 }
 
-////////////////////////////////////////////////////////////////////Helping Methods
-
-visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster, int id, string f_id, string ns="bounding_box", float r=0.5, float g=0.5, float b=0.5)
-{
-  Eigen::Vector4f centroid;
-  Eigen::Vector4f min;
-  Eigen::Vector4f max;
-
-  pcl::compute3DCentroid(*cloud_cluster, centroid);
-  pcl::getMinMax3D(*cloud_cluster, min, max);
-
-  uint32_t shape = visualization_msgs::Marker::CUBE;
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = f_id;
-  marker.header.stamp = ros::Time::now();
-
-  marker.ns = ns;
-  marker.id = id;
-  marker.type = shape;
-  marker.action = visualization_msgs::Marker::ADD;
-
-  marker.pose.position.x = centroid[0];
-  marker.pose.position.y = centroid[1];
-  marker.pose.position.z = centroid[2];
-  marker.pose.orientation.x = 0.0;
-  marker.pose.orientation.y = 0.0;
-  marker.pose.orientation.z = 0.0;
-  marker.pose.orientation.w = 1.0;
-
-  marker.scale.x = (max[0]-min[0]);
-  marker.scale.y = (max[1]-min[1]);
-  marker.scale.z = (max[2]-min[2]);
-
-  if (marker.scale.x ==0)
-      marker.scale.x=0.1;
-
-  if (marker.scale.y ==0)
-    marker.scale.y=0.1;
-
-  if (marker.scale.z ==0)
-    marker.scale.z=0.1;
-
-  marker.color.r = r;
-  marker.color.g = g;
-  marker.color.b = b;
-  marker.color.a = 0.5;
-
-  marker.lifetime = ros::Duration(0.2);
-  return marker;
-}
-
-////////////////////////////////////////////////////////////////////////
-
-MovingObjectRemoval::MovingObjectRemoval(int n_bad,int n_good)
+MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_path,int n_bad,int n_good):nh(nh_)
 {
     moving_confidence = n_bad+1;
     static_confidence = n_good;
 
+    #ifdef VISUALIZE
+    pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 10);
+    marker_pub = nh.advertise<visualization_msgs::Marker>("bbox", 10);
+    #endif
+
+    #ifdef INTERNAL_SYNC
+    pc_sub.subscribe(nh, "/velodyne_points", 1);
+    odom_sub.subscribe(nh, "/camera/odom/sample", 1);
+    sync.reset(new message_filters::Synchronizer<MySyncPolicy>(MySyncPolicy(10),pc_sub,odom_sub));
+    sync->registerCallback(boost::bind(&MovingObjectRemoval::movingCloudObjectSubscriber, this, _1, _2));
+    #endif
+
     ca.reset(new MovingObjectDetectionCloud());
     cb.reset(new MovingObjectDetectionCloud());
     mth.reset(new MovingObjectDetectionMethods());
+}
+
+void MovingObjectRemoval::movingCloudObjectSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm)
+{
+  clock_t begin_time = clock();
+  std::cout<<"-----------------------------------------------------\n";
+  pcl::PCLPointCloud2 cloud;
+  pcl_conversions::toPCL(*input, cloud);
+  pushRawCloudAndPose(cloud,odm->pose.pose);
+  if(filterCloud(cloud,"/previous"))
+  {
+    #ifdef VISUALIZE
+    pub.publish(output);
+    #endif
+  }
+
+  std::cout<<1000.0*(clock()-begin_time)/CLOCKS_PER_SEC<<std::endl;
+  std::cout<<"-----------------------------------------------------\n";
 }
 
 int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
@@ -334,7 +366,7 @@ void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
 	mo_vec.push_back(moc);
 }
 
-void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,vector<bool> &res_ca,vector<bool> &res_cb)
+void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb)
 {
   corrs_vec.push_back(mp);
   if(res_vec.size()!=0)
@@ -344,7 +376,6 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,vec
   res_vec.push_back(res_ca);
   res_vec.push_back(res_cb);
   
-  cout<<mo_vec.size()<<" "<<corrs_vec.size()<<" "<<res_vec.size()<<endl;
   if(res_vec.size()%moving_confidence==0)
   {
     for(int i=0;i<res_vec[0].size();i++)
@@ -363,12 +394,12 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,vec
   }
 }
 
-void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometry_msgs::Pose pose)
+void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geometry_msgs::Pose pose)
 {
   ca = cb;
   cb.reset(new MovingObjectDetectionCloud());
 
-  pcl::fromPCLPointCloud2(cloud, *(cb->cloud));
+  pcl::fromPCLPointCloud2(in_cloud, *(cb->cloud));
 
   tf::poseMsgToTF(pose,cb->ps);
   cb->groundPlaneRemoval(4.0,4.0,5.0);
@@ -389,14 +420,12 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 	  	pcl_ros::transformPointCloud(temp,*ca->clusters[i],t);
 	}
 
-	//pcl::toPCLPointCloud2(*ca->cluster_collection,cloud);
-	//pcl_conversions::fromPCL(cloud, output);
-	//output.header.frame_id = "previous";
-	//pub.publish(output);
-	pcl::toPCLPointCloud2(*cb->cluster_collection,cloud);
-	pcl_conversions::fromPCL(cloud, output);
+  #ifdef VISUALIZE
+	pcl::toPCLPointCloud2(*cb->cluster_collection,in_cloud);
+	pcl_conversions::fromPCL(in_cloud, output);
 	output.header.frame_id = "/current";
 	pub.publish(output);
+  #endif
   		
 	pcl::CorrespondencesPtr mp(new pcl::Correspondences());
 	  	
@@ -404,12 +433,12 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
 	mth->calculateCorrespondenceCentroid(ca->clusters,cb->clusters,ca->centroid_collection,cb->centroid_collection,mp,0.1);
 	  	
 	//moving object detection methods (Local)
-	//vector<double> param_vec = mth->getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
-	vector<long> param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
+	//std::vector<double> param_vec = mth->getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
+	std::vector<long> param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
 
 	for(int j=0;j<mp->size();j++)
 	{
-		//cout<<"{"<<(*mp)[j].index_query<<"->"<<(*mp)[j].index_match<<"} Fit Score: "<<(*mp)[j].distance<<" Moving_Score: "<<param_vec[j]<<endl;
+		//std::cout<<"{"<<(*mp)[j].index_query<<"->"<<(*mp)[j].index_match<<"} Fit Score: "<<(*mp)[j].distance<<" Moving_Score: "<<param_vec[j]<<std::endl;
 		long threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/25;
 		//double threshold = 0.15;
 		if(param_vec[j]>threshold)
@@ -427,19 +456,21 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometr
   }
 }
 
-bool MovingObjectRemoval::filterCloud(string f_id)
+bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string f_id)
 {
 	xyz_tree.setInputCloud(cb->centroid_collection);
 	float rd=0.8,gd=0.1,bd=0.4;int id = 1;
   pcl::PointIndicesPtr moving_points(new pcl::PointIndices);
 	for(int i=0;i<mo_vec.size();i++)
 	{
-		vector<int> pointIdxNKNSearch(1);
-		vector<float> pointNKNSquaredDistance(1);
+		std::vector<int> pointIdxNKNSearch(1);
+		std::vector<float> pointNKNSquaredDistance(1);
 		if(xyz_tree.nearestKSearch(mo_vec[i].centroid, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
 		{
+      #ifdef VISUALIZE
 			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,"/current","bounding_box",rd,gd,bd));
-			
+			#endif
+
       for(int j=0;j<cb->cluster_indices[pointIdxNKNSearch[0]].indices.size();j++)
       {
         moving_points->indices.push_back(cb->cluster_indices[pointIdxNKNSearch[0]].indices[j]);
@@ -462,16 +493,14 @@ bool MovingObjectRemoval::filterCloud(string f_id)
 		}
 	}
 
-  /*pcl::PointCloud<pcl::PointXYZI>::Ptr f_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr f_cloud(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::ExtractIndices<pcl::PointXYZI> extract;
   extract.setInputCloud(cb->cloud);
   extract.setIndices(moving_points);
   extract.setNegative(true);
   extract.filter(*f_cloud);
-
-  pcl::toPCLPointCloud2(*f_cloud,cloud);
-  pcl_conversions::fromPCL(cloud, output);
-  output.header.frame_id = "/current";*/
-
-	return false;
+  pcl::toPCLPointCloud2(*f_cloud,out_cloud);
+  pcl_conversions::fromPCL(out_cloud, output);
+  output.header.frame_id = f_id;
+  return true;
 }

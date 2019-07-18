@@ -6,7 +6,6 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <pcl/correspondence.h>
-//#include <pcl/visualization/histogram_visualizer.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/registration/correspondence_estimation.h>
@@ -27,4 +26,5 @@
 #include <string>
 #include <ctime>
 
-using namespace std;
+#define VISUALIZE
+#define INTERNAL_SYNC

@@ -1,15 +1,13 @@
 #include "MOR/IncludeAll.h"
-
-//for testing purpose only
-ros::Publisher pub,marker_pub;
+typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, nav_msgs::Odometry> MySyncPolicy;
 
 struct MovingObjectDetectionCloud
 {
 	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,cluster_collection;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_collection;
-	vector<pcl::PointIndices> cluster_indices;
-	vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
-	vector<bool> detection_results;
+	std::vector<pcl::PointIndices> cluster_indices;
+	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
+	std::vector<bool> detection_results;
 	tf::Pose ps;
 	bool init;
 
@@ -22,16 +20,16 @@ struct MovingObjectDetectionCloud
 	}
 	void groundPlaneRemoval(float,float,float);
 	void groundPlaneRemoval();
-	void computeClusters(float,string);
+	void computeClusters(float,std::string);
 };
 
 class MovingObjectDetectionMethods
 {
 	public:
 		bool volumeConstraint(pcl::PointCloud<pcl::PointXYZI>::Ptr fp, pcl::PointCloud<pcl::PointXYZI>::Ptr fc,double threshold);
-		void calculateCorrespondenceCentroid(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta);
-		vector<double> getPointDistanceEstimateVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp);
-		vector<long> getClusterPointcloudChangeVector(vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp,float resolution);
+		void calculateCorrespondenceCentroid(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::PointCloud<pcl::PointXYZ>::Ptr fp, pcl::PointCloud<pcl::PointXYZ>::Ptr fc, pcl::CorrespondencesPtr mp,double delta);
+		std::vector<double> getPointDistanceEstimateVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp);
+		std::vector<long> getClusterPointcloudChangeVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp,float resolution);
 };
 
 struct MovingObjectCentroid
@@ -46,20 +44,31 @@ struct MovingObjectCentroid
 
 class MovingObjectRemoval
 {
-	vector<MovingObjectCentroid> mo_vec;
-	deque<pcl::CorrespondencesPtr> corrs_vec;
-	deque<vector<bool>> res_vec;
+	std::vector<MovingObjectCentroid> mo_vec;
+	std::deque<pcl::CorrespondencesPtr> corrs_vec;
+	std::deque<std::vector<bool>> res_vec;
 	boost::shared_ptr<MovingObjectDetectionCloud> ca,cb;
 	boost::shared_ptr<MovingObjectDetectionMethods> mth;
 	int moving_confidence,static_confidence;
 	pcl::KdTreeFLANN<pcl::PointXYZ> xyz_tree;
 
+	ros::NodeHandle& nh;
+	#ifdef VISUALIZE
+	ros::Publisher pub,marker_pub;
+	#endif
+	#ifdef INTERNAL_SYNC
+	message_filters::Subscriber<sensor_msgs::PointCloud2> pc_sub;
+	message_filters::Subscriber<nav_msgs::Odometry> odom_sub;
+	boost::shared_ptr<message_filters::Synchronizer<MySyncPolicy>> sync;
+	#endif
+
+	void movingCloudObjectSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm);
 	int recurseFindClusterChain(int col,int track);
-	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,vector<bool> &res_ca,vector<bool> &res_cb);
+	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb);
 	void pushCentroid(pcl::PointXYZ pt);
 	public:
 		sensor_msgs::PointCloud2 output;
-		MovingObjectRemoval(int n_bad,int n_good);
+		MovingObjectRemoval(ros::NodeHandle _nh,std::string config_path,int n_bad,int n_good);
 		void pushRawCloudAndPose(pcl::PCLPointCloud2 &cloud,geometry_msgs::Pose pose);
-		bool filterCloud(string f_id);
+		bool filterCloud(pcl::PCLPointCloud2 &cloud,std::string f_id);
 };
