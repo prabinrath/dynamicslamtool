@@ -2,7 +2,7 @@
 
 int main (int argc, char** argv)
 {
-  ros::init (argc, argv, "test_moving_object");
+  ros::init (argc, argv, "dynamic_slam_tool");
   ros::NodeHandle nh;
 
   MovingObjectRemoval mor(nh,"under_dev",3,3);

@@ -24,7 +24,7 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 int main (int argc, char** argv)
 {
   #ifndef INTERNAL_SYNC 
-  ros::init (argc, argv, "test_moving_object");
+  ros::init (argc, argv, "dynamic_slam_tool");
   ros::NodeHandle nh;
   pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 10);
 
