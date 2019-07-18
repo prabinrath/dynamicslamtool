@@ -12,7 +12,7 @@ void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav
 	pcl_conversions::toPCL(*input, cloud);
 
 	mor->pushRawCloudAndPose(cloud,odm->pose.pose);
-	if(mor->filterCloud(cloud,"/previous"))
+	if(mor->filterCloud(cloud,"/current"))
 	{
 		pub.publish(mor->output);
 	}

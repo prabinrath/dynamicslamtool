@@ -402,7 +402,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   pcl::fromPCLPointCloud2(in_cloud, *(cb->cloud));
 
   tf::poseMsgToTF(pose,cb->ps);
-  cb->groundPlaneRemoval(4.0,4.0,5.0);
+  cb->groundPlaneRemoval(3.0,3.0,5.0);
   //cb->groundPlaneRemoval();
   cb->computeClusters(0.11,"single_cluster");
   cb->init = true;
