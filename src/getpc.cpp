@@ -9,6 +9,7 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/crop_box.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
@@ -283,11 +284,34 @@ void ransac_check(const sensor_msgs::PointCloud2ConstPtr &input)
   pub.publish(output);
 }
 
+void cropbox_check(const sensor_msgs::PointCloud2ConstPtr &input)
+{
+    sensor_msgs::PointCloud2 output;
+    pcl::PCLPointCloud2 *cloud = new pcl::PCLPointCloud2;
+    pcl_conversions::toPCL(*input, *cloud);
+    pcl::fromPCLPointCloud2(*cloud, *ca);
+
+    pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
+    cropBoxFilter.setInputCloud(ca);
+    Eigen::Vector4f min_pt(-1.0f, -1.0f, -1.0f, 1.0f);
+    Eigen::Vector4f max_pt(1.0f, 1.0f, 1.0f, 1.0f);
+    cropBoxFilter.setMin(min_pt);
+    cropBoxFilter.setMax(max_pt);
+    cropBoxFilter.setNegative(true);
+    cropBoxFilter.setTranslation(Eigen::Vector3f(1, 1, 0));
+    cropBoxFilter.filter(*cb);
+
+    pcl::toPCLPointCloud2(*cb,*cloud);
+    pcl_conversions::fromPCL(*cloud, output);
+    output.header.frame_id = "/current";
+    pub.publish(output);
+}
+
 int main (int argc, char** argv)
 {
   ros::init (argc, argv, "test_pcl");
   ros::NodeHandle nh;
-  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 1, groundPlaneRemoval);
+  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 1, cropbox_check);
   pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 1);
   marker_pub = nh.advertise<visualization_msgs::Marker>("bbox", 10);
 
