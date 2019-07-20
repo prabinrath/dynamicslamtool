@@ -4,6 +4,7 @@
 #include <geometry_msgs/Pose.h>
 #include <nav_msgs/Odometry.h>
 #include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <pcl/correspondence.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
@@ -26,5 +27,5 @@
 #include <string>
 #include <ctime>
 
-//#define VISUALIZE
-//#define INTERNAL_SYNC
+#define VISUALIZE
+#define INTERNAL_SYNC

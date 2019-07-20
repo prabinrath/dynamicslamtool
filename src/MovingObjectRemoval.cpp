@@ -287,22 +287,24 @@ std::vector<double> MovingObjectDetectionMethods::getPointDistanceEstimateVector
 	return estimates;
 }
 
-MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_path,int n_bad,int n_good):nh(nh_)
+MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_path,int n_bad,int n_good):nh(nh_),moving_confidence(n_bad),static_confidence(n_good)
 {
-    moving_confidence = n_bad+1;
-    static_confidence = n_good;
-
     #ifdef VISUALIZE
     pub = nh.advertise<sensor_msgs::PointCloud2> ("output", 10);
     marker_pub = nh.advertise<visualization_msgs::Marker>("bbox", 10);
     #endif
 
     #ifdef INTERNAL_SYNC
-    pc_sub.subscribe(nh, "/velodyne_points", 1);
-    odom_sub.subscribe(nh, "/camera/odom/sample", 1);
-    sync.reset(new message_filters::Synchronizer<MySyncPolicy>(MySyncPolicy(10),pc_sub,odom_sub));
-    sync->registerCallback(boost::bind(&MovingObjectRemoval::movingCloudObjectSubscriber, this, _1, _2));
+    raw_pc_sub.subscribe(nh, "/velodyne_points", 1);
+    raw_odom_sub.subscribe(nh, "/camera/odom/sample", 1);
+    sync_process.reset(new message_filters::Synchronizer<MySyncPolicy>(MySyncPolicy(10),raw_pc_sub,raw_odom_sub));
+    sync_process->registerCallback(boost::bind(&MovingObjectRemoval::movingCloudObjectSubscriber, this, _1, _2));
     #endif
+
+    map_pc_sub.subscribe(nh, "/point_map", 1);
+    map_odom_sub.subscribe(nh, "/icp_odom", 1);
+    sync_update.reset(new message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry>(map_pc_sub, map_odom_sub, 10));
+    sync_update->registerCallback(boost::bind(&MovingObjectRemoval::mapUpdateSubscriber, this, _1, _2));
 
     ca.reset(new MovingObjectDetectionCloud());
     cb.reset(new MovingObjectDetectionCloud());
@@ -327,8 +329,9 @@ void MovingObjectRemoval::movingCloudObjectSubscriber(const sensor_msgs::PointCl
   std::cout<<"-----------------------------------------------------\n";
 }
 
-int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
+int MovingObjectRemoval::recurseFindClusterChain(int col,int track,std::vector<pcl::PointXYZ> &tv)
 {
+  tv.push_back(centroid_track[col]->points[track]);
   if(col == corrs_vec.size())
   {
     return track;
@@ -340,7 +343,7 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
     {
       if(res_vec[col+1][(*corrs_vec[col])[j].index_match] == true)
       {
-        return recurseFindClusterChain(col+1,(*corrs_vec[col])[j].index_match);
+        return recurseFindClusterChain(col+1,(*corrs_vec[col])[j].index_match,tv);
       }
       else
       {
@@ -351,22 +354,23 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
   return -1;
 }
 
-void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
+void MovingObjectRemoval::pushCentroid(std::vector<pcl::PointXYZ> &tv)
 {
 	for(int i=0;i<mo_vec.size();i++)
 	{
-		double dist = sqrt(pow(pt.x-mo_vec[i].centroid.x,2)+pow(pt.y-mo_vec[i].centroid.y,2)+pow(pt.z-mo_vec[i].centroid.z,2));
+		double dist = sqrt(pow(tv[moving_confidence-1].x-mo_vec[i].centroids[moving_confidence-1].x,2)+pow(tv[moving_confidence-1].y-mo_vec[i].centroids[moving_confidence-1].y,2)+pow(tv[moving_confidence-1].z-mo_vec[i].centroids[moving_confidence-1].z,2));
 		if(dist<0.2)
 		{
+      mo_vec[i].centroids = tv;
 			return;
 		}
 	}
 
-	MovingObjectCentroid moc(pt,static_confidence);
+	MovingObjectCentroid moc(tv,static_confidence);
 	mo_vec.push_back(moc);
 }
 
-void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb)
+void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb,pcl::PointCloud<pcl::PointXYZ>::Ptr ca_cc, pcl::PointCloud<pcl::PointXYZ>::Ptr cb_cc)
 {
   corrs_vec.push_back(mp);
   if(res_vec.size()!=0)
@@ -376,21 +380,32 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std
   res_vec.push_back(res_ca);
   res_vec.push_back(res_cb);
   
+  if(centroid_track.size()==0)
+  {
+    centroid_track.push_back(ca_cc);
+  }
+  centroid_track.push_back(cb_cc);
+
+  //std::cout<<corrs_vec.size()<<" "<<res_vec.size()<<" "<<centroid_track.size()<<std::endl;
+
   if(res_vec.size()%moving_confidence==0)
   {
     for(int i=0;i<res_vec[0].size();i++)
     {
       if(res_vec[0][i] == true)
       {
-      	int found_moving_index = recurseFindClusterChain(0,i);
+        std::vector<pcl::PointXYZ> tracking_vec;
+      	int found_moving_index = recurseFindClusterChain(0,i,tracking_vec);
         if(found_moving_index != -1)
         {
-          pushCentroid(cb->centroid_collection->points[found_moving_index]);
+          std::cout<<tracking_vec.size()<<std::endl;
+          pushCentroid(tracking_vec);
         }
       }
     }
     corrs_vec.pop_front();
     res_vec.pop_front();
+    centroid_track.pop_front();
   }
 }
 
@@ -404,7 +419,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   tf::poseMsgToTF(pose,cb->ps);
   cb->groundPlaneRemoval(3.0,3.0,5.0);
   //cb->groundPlaneRemoval();
-  cb->computeClusters(0.11,"single_cluster");
+  cb->computeClusters(0.12,"single_cluster");
   cb->init = true;
 
   if(ca->init  == true && cb->init == true)
@@ -452,7 +467,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 			cb->detection_results[(*mp)[j].index_match] = false;
 		}
 	}
-	checkMovingClusterChain(mp,ca->detection_results,cb->detection_results);
+	checkMovingClusterChain(mp,ca->detection_results,cb->detection_results,ca->centroid_collection,cb->centroid_collection);
   }
 }
 
@@ -465,7 +480,7 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 	{
 		std::vector<int> pointIdxNKNSearch(1);
 		std::vector<float> pointNKNSquaredDistance(1);
-		if(xyz_tree.nearestKSearch(mo_vec[i].centroid, 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
+		if(xyz_tree.nearestKSearch(mo_vec[i].centroids[moving_confidence-1], 1, pointIdxNKNSearch, pointNKNSquaredDistance) > 0 )
 		{
       #ifdef VISUALIZE
 			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,"/current","bounding_box",rd,gd,bd));
@@ -486,7 +501,6 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 			}
 			else
 			{
-				mo_vec[i].centroid = cb->centroid_collection->points[pointIdxNKNSearch[0]];
 				mo_vec[i].increaseConfidence();
 			}
 			id++;
@@ -503,4 +517,9 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
   pcl_conversions::fromPCL(out_cloud, output);
   output.header.frame_id = f_id;
   return true;
+}
+
+void MovingObjectRemoval::mapUpdateSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm)
+{
+
 }

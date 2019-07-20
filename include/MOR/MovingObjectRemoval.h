@@ -34,10 +34,10 @@ class MovingObjectDetectionMethods
 
 struct MovingObjectCentroid
 {
-	pcl::PointXYZ centroid;
+	std::vector<pcl::PointXYZ> centroids;
 	int confidence,max_confidence;
 
-	MovingObjectCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good),max_confidence(n_good){}
+	MovingObjectCentroid(std::vector<pcl::PointXYZ> c,int n_good):centroids(c),confidence(n_good),max_confidence(n_good){}
 	bool decreaseConfidence(){confidence--;if(confidence==0){return true;}return false;}
 	void increaseConfidence(){if(confidence<max_confidence){confidence++;}}
 };
@@ -47,6 +47,7 @@ class MovingObjectRemoval
 	std::vector<MovingObjectCentroid> mo_vec;
 	std::deque<pcl::CorrespondencesPtr> corrs_vec;
 	std::deque<std::vector<bool>> res_vec;
+	std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr> centroid_track;
 	boost::shared_ptr<MovingObjectDetectionCloud> ca,cb;
 	boost::shared_ptr<MovingObjectDetectionMethods> mth;
 	int moving_confidence,static_confidence;
@@ -57,15 +58,20 @@ class MovingObjectRemoval
 	ros::Publisher pub,marker_pub;
 	#endif
 	#ifdef INTERNAL_SYNC
-	message_filters::Subscriber<sensor_msgs::PointCloud2> pc_sub;
-	message_filters::Subscriber<nav_msgs::Odometry> odom_sub;
-	boost::shared_ptr<message_filters::Synchronizer<MySyncPolicy>> sync;
+	message_filters::Subscriber<sensor_msgs::PointCloud2> raw_pc_sub;
+	message_filters::Subscriber<nav_msgs::Odometry> raw_odom_sub;
+	boost::shared_ptr<message_filters::Synchronizer<MySyncPolicy>> sync_process;
 	#endif
 
+	message_filters::Subscriber<sensor_msgs::PointCloud2> map_pc_sub;
+  	message_filters::Subscriber<nav_msgs::Odometry> map_odom_sub;
+  	boost::shared_ptr<message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry>> sync_update;
+
+  	void mapUpdateSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm);
 	void movingCloudObjectSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm);
-	int recurseFindClusterChain(int col,int track);
-	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb);
-	void pushCentroid(pcl::PointXYZ pt);
+	int recurseFindClusterChain(int col,int track,std::vector<pcl::PointXYZ> &tv);
+	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb,pcl::PointCloud<pcl::PointXYZ>::Ptr ca_cc, pcl::PointCloud<pcl::PointXYZ>::Ptr cb_cc);
+	void pushCentroid(std::vector<pcl::PointXYZ> &tv);
 	public:
 		sensor_msgs::PointCloud2 output;
 		MovingObjectRemoval(ros::NodeHandle _nh,std::string config_path,int n_bad,int n_good);
