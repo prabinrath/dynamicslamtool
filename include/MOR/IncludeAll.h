@@ -26,5 +26,5 @@
 #include <string>
 #include <ctime>
 
-//#define VISUALIZE
-//#define INTERNAL_SYNC
+#define VISUALIZE
+#define INTERNAL_SYNC
