@@ -291,14 +291,13 @@ void cropbox_check(const sensor_msgs::PointCloud2ConstPtr &input)
     pcl_conversions::toPCL(*input, *cloud);
     pcl::fromPCLPointCloud2(*cloud, *ca);
 
-    pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
+    pcl::CropBox<pcl::PointXYZI> cropBoxFilter(true);
     cropBoxFilter.setInputCloud(ca);
-    Eigen::Vector4f min_pt(-1.0f, -1.0f, -1.0f, 1.0f);
-    Eigen::Vector4f max_pt(1.0f, 1.0f, 1.0f, 1.0f);
+    Eigen::Vector4f min_pt(-4.0f, -4.0f, -0.5f, 1.0f);
+    Eigen::Vector4f max_pt(4.0f, 4.0f, 5.0f, 1.0f);
     cropBoxFilter.setMin(min_pt);
     cropBoxFilter.setMax(max_pt);
-    cropBoxFilter.setNegative(true);
-    cropBoxFilter.setTranslation(Eigen::Vector3f(1, 1, 0));
+    cropBoxFilter.setNegative(false);
     cropBoxFilter.filter(*cb);
 
     pcl::toPCLPointCloud2(*cb,*cloud);
