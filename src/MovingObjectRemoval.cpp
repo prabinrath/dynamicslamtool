@@ -64,10 +64,17 @@ void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
   	pass.setFilterFieldName("y");
   	pass.setFilterLimits(-y, y);
   	pass.filter(*cloud);
-  	pass.setInputCloud(cloud);
-  	pass.setFilterFieldName("z");
-  	pass.setFilterLimits(-0.5, z);
-  	pass.filter(*cloud);
+
+    *raw_cloud = *cloud;
+    pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
+    cropBoxFilter.setInputCloud(raw_cloud);
+    Eigen::Vector4f min_pt(-x, -y, -0.5f, 1.0f);
+    Eigen::Vector4f max_pt(x, y, z, 1.0f);
+    cropBoxFilter.setMin(min_pt);
+    cropBoxFilter.setMax(max_pt);
+    //cropBoxFilter.setNegative(true);
+    cropBoxFilter.filter(*cloud);
+    gp_indices = cropBoxFilter.getRemovedIndices();
 }
 
 void MovingObjectDetectionCloud::groundPlaneRemoval()
@@ -417,9 +424,9 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   pcl::fromPCLPointCloud2(in_cloud, *(cb->cloud));
 
   tf::poseMsgToTF(pose,cb->ps);
-  cb->groundPlaneRemoval(3.0,3.0,5.0);
+  cb->groundPlaneRemoval(4.0,4.0,5.0);
   //cb->groundPlaneRemoval();
-  cb->computeClusters(0.12,"single_cluster");
+  cb->computeClusters(0.11,"single_cluster");
   cb->init = true;
 
   if(ca->init  == true && cb->init == true)
@@ -513,6 +520,15 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
   extract.setIndices(moving_points);
   extract.setNegative(true);
   extract.filter(*f_cloud);
+
+  for(int i=0;i<cb->gp_indices->size();i++)
+  {
+    f_cloud->points.push_back(cb->raw_cloud->points[cb->gp_indices->at(i)]);
+  }
+  f_cloud->width = f_cloud->points.size();
+  f_cloud->height = 1;
+  f_cloud->is_dense = true;
+
   pcl::toPCLPointCloud2(*f_cloud,out_cloud);
   pcl_conversions::fromPCL(out_cloud, output);
   output.header.frame_id = f_id;

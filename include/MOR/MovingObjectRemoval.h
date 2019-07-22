@@ -3,9 +3,10 @@ typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2
 
 struct MovingObjectDetectionCloud
 {
-	pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,cluster_collection;
+	pcl::PointCloud<pcl::PointXYZI>::Ptr raw_cloud,cloud,cluster_collection;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_collection;
 	std::vector<pcl::PointIndices> cluster_indices;
+	pcl::IndicesConstPtr gp_indices;
 	std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> clusters;
 	std::vector<bool> detection_results;
 	tf::Pose ps;
@@ -13,6 +14,7 @@ struct MovingObjectDetectionCloud
 
 	MovingObjectDetectionCloud()
 	{
+		raw_cloud.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		cloud.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
 		centroid_collection.reset(new pcl::PointCloud<pcl::PointXYZ>);
