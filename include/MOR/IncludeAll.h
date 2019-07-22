@@ -15,6 +15,7 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/crop_box.h>
 #include <visualization_msgs/Marker.h>
 #include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
