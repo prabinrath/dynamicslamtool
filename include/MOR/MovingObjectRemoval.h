@@ -101,8 +101,8 @@ class MovingObjectRemoval
 	*/
 
 	float gp_limit,gp_leaf,bin_gap,volume_constraint,pde_lb,pde_ub,leave_off_distance,catch_up_distance,trim_x,trim_y,trim_z,ec_distance_threshold,pde_distance_threshold;
-	long min_cluster_size,max_cluster_size,opc_normalization_factor;
-	int method_choice;
+	long min_cluster_size,max_cluster_size;
+	int method_choice,opc_normalization_factor;
 	std::string output_topic,marker_topic,input_pointcloud_topic,input_odometry_topic,output_fid,debug_fid;
 	/*configuration variables*/
 
