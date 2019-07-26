@@ -15,11 +15,11 @@ min_cluster_size:200
 max_cluster_size:35000
 
 #Ground plane removal voxel covariance
-gp_limit:-0.5
 gp_leaf:0.1
 bin_gap:10
 
 #Ground plane removal hard coded
+gp_limit:-0.5
 trim_x:4.0
 trim_y:4.0
 trim_z:5.0
