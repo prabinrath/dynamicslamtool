@@ -12,6 +12,10 @@ struct MovingObjectDetectionCloud
 	moving object detection results after computation.
 	*/
 
+	float gp_limit,gp_leaf,bin_gap;
+	long min_cluster_size,max_cluster_size;
+	/*configuration variables*/
+
 	pcl::PointCloud<pcl::PointXYZI>::Ptr raw_cloud,cloud,cluster_collection;
 	/*raw_cloud: stores the pointcloud after trimming it in x,y,z axis
 	cloud: stores pointcloud after ground plane removal
@@ -37,7 +41,7 @@ struct MovingObjectDetectionCloud
 	
 	bool init;//hepls in synchronization
 
-	MovingObjectDetectionCloud()
+	MovingObjectDetectionCloud(float gp_lm,float gp_lf,float bin_g,long min_cl_s,long max_cl_s):gp_limit(gp_lm),gp_leaf(gp_lf),bin_gap(bin_g),min_cluster_size(min_cl_s),max_cluster_size(max_cl_s)
 	{
 		//constructor to initialize shared pointers and default variables
 		raw_cloud.reset(new pcl::PointCloud<pcl::PointXYZI>);
@@ -47,7 +51,7 @@ struct MovingObjectDetectionCloud
 		init = false;
 	}
 	void groundPlaneRemoval(float,float,float); //ground plane removal with predefined dimensions
-	void groundPlaneRemoval(); //ground plane removal using voxel covariance and binning
+	void groundPlaneRemoval(float,float); //ground plane removal using voxel covariance and binning
 	void computeClusters(float,std::string); //computes the euclidian clustering with an input distance threshold
 };
 
@@ -57,7 +61,12 @@ class MovingObjectDetectionMethods
 	A class to implement the methods and constraints for moving object detection between consecutive
 	pointclouds.
 	*/
+
+	float volume_constraint,pde_lb,pde_ub;
+
 	public:
+		MovingObjectDetectionMethods(float v_c,float p_l,float p_u):volume_constraint(v_c),pde_lb(p_l),pde_ub(p_u){}
+
 		bool volumeConstraint(pcl::PointCloud<pcl::PointXYZI>::Ptr fp, pcl::PointCloud<pcl::PointXYZI>::Ptr fc,double threshold);
 		/*checks if two corresponding clusters have nearly equal volume, using an input threshold*/
 
@@ -67,7 +76,7 @@ class MovingObjectDetectionMethods
 		std::vector<double> getPointDistanceEstimateVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp);
 		/*implimentation of point correspondence distance estimation approach*/
 
-		std::vector<long> getClusterPointcloudChangeVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp,float resolution);
+		std::vector<double> getClusterPointcloudChangeVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2,pcl::CorrespondencesPtr mp,float resolution);
 		/*implementation of octree pointcloud change approach*/
 };
 
@@ -90,6 +99,13 @@ class MovingObjectRemoval
 	A class for implementing the algorithms for detection and removal of moving objects. It includes
 	cluster tracking using confidence scores and handles the input data in a serial in and serial out manner. 
 	*/
+
+	float gp_limit,gp_leaf,bin_gap,volume_constraint,pde_lb,pde_ub,leave_off_distance,catch_up_distance,trim_x,trim_y,trim_z,ec_distance_threshold,pde_distance_threshold;
+	long min_cluster_size,max_cluster_size,opc_normalization_factor;
+	int method_choice;
+	std::string output_topic,marker_topic,input_pointcloud_topic,input_odometry_topic,output_fid,debug_fid;
+	/*configuration variables*/
+
 	std::vector<MovingObjectCentroid> mo_vec;
 	/*vector to store the detected and confirmed moving cluster properties*/
 
@@ -123,6 +139,9 @@ class MovingObjectRemoval
 	message_filters::Subscriber<nav_msgs::Odometry> odom_sub;
 	boost::shared_ptr<message_filters::Synchronizer<MySyncPolicy>> sync;
 	#endif
+
+	void setVariables(std::string config_file_path);
+	/*sets the algorithm variables from the config file*/
 
 	void movingCloudObjectSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm);
 	/*call back to get incoming data using internal sync*/

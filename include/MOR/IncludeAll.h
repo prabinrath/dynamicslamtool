@@ -26,6 +26,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <string>
+#include <fstream>
 #include <ctime>
 
 #define VISUALIZE 

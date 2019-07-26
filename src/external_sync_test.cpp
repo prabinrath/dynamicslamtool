@@ -34,7 +34,7 @@ int main (int argc, char** argv)
   message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), pc_sub, odom_sub);
   sync.registerCallback(boost::bind(&moving_object_test, _1, _2));
 
-  mor.reset(new MovingObjectRemoval(nh,"under_dev",3,3));
+  mor.reset(new MovingObjectRemoval(nh,"/home/ar2s/catkin_ws/src/Research_stages/config/MOR_config.txt",3,3));
 
   ros::spin();
   #endif

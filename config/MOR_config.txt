@@ -1,0 +1,38 @@
+#Detection algorithm choice
+method_choice:2
+
+#ROS parameters
+output_topic:/output
+marker_topic:/bbox
+input_pointcloud_topic:/velodyne_points
+input_odometry_topic:/camera/odom/sample
+output_fid:/previous
+debug_fid:/current
+
+#Clustering parameters
+ec_distance_threshold:0.11
+min_cluster_size:200
+max_cluster_size:35000
+
+#Ground plane removal voxel covariance
+gp_limit:-0.5
+gp_leaf:0.1
+bin_gap:10
+
+#Ground plane removal hard coded
+trim_x:3.0
+trim_y:3.0
+trim_z:5.0
+
+#Point distance estimate method parameters (needed when method_choice is 1)
+pde_lb:0.005
+pde_ub:0.5
+pde_distance_threshold:0.15
+
+#Octree pointcloud chance method parameters (needed when method_choice is 2)
+opc_normalization_factor:25
+
+#Cluster tracking prameters
+volume_constraint:0.3
+leave_off_distance:0.5
+catch_up_distance:0.2

@@ -86,7 +86,7 @@ void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
     /*ground plane is removed from 'raw_cloud' and their indices are stored in gp_indices*/
 }
 
-void MovingObjectDetectionCloud::groundPlaneRemoval()
+void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y)
 {
     /*Voxel covariance based ground plane removal.*/
 
@@ -178,16 +178,17 @@ void MovingObjectDetectionCloud::groundPlaneRemoval()
     /*search for the bin holding highest number of points. it is supposed to be the dominating 
     plane surface*/
 
-    gp_indices.reset(new pcl::Indices);
+    boost::shared_ptr<std::vector<int>> gp_i;
     pcl::PointIndicesPtr ground_plane(new pcl::PointIndices);
     for(int i=0;i<bins[tracked_key].size();i++)
     {
       for(int j=0;j<index_bank[bins[tracked_key][i]].size();j++)
       {
-        gp_indices->push_back(index_bank[bins[tracked_key][i]][j]); //store the ground plane point indices in 'gp_indices'
+        gp_i->push_back(index_bank[bins[tracked_key][i]][j]); //store the ground plane point indices in 'gp_indices'
         ground_plane->indices.push_back(index_bank[bins[tracked_key][i]][j]);
       }
     }
+    gp_indices = gp_i;
 
     pcl::ExtractIndices<pcl::PointXYZI> extract;
     extract.setInputCloud(raw_cloud);
@@ -304,13 +305,13 @@ void MovingObjectDetectionMethods::calculateCorrespondenceCentroid(std::vector<p
   	}
 }
 
-std::vector<long> MovingObjectDetectionMethods::getClusterPointcloudChangeVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
+std::vector<double> MovingObjectDetectionMethods::getClusterPointcloudChangeVector(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c1,std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &c2, pcl::CorrespondencesPtr mp,float resolution = 0.3f)
 {
   /*builds the octree representation of the source and destination clouds. finds the
   number of new points appearing in the destination cloud with respect to the source
   cloud. repeats this for each pair of corresponding pointcloud clusters*/
 
-  std::vector<long> changed;
+  std::vector<double> changed;
   srand((unsigned int)time(NULL));
   for(int j=0;j<mp->size();j++)
   {
@@ -364,6 +365,8 @@ std::vector<double> MovingObjectDetectionMethods::getPointDistanceEstimateVector
 
 MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_path,int n_bad,int n_good):nh(nh_),moving_confidence(n_bad),static_confidence(n_good)
 {
+    setVariables(config_path);
+
     /*ROS setup*/
     #ifdef VISUALIZE
     pub = nh.advertise<sensor_msgs::PointCloud2> (output_topic, 10);
@@ -378,9 +381,9 @@ MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_
     /*internal message synchronization using ROS Approximate Time policy*/
     #endif
 
-    ca.reset(new MovingObjectDetectionCloud()); //previous pointcloud frame
-    cb.reset(new MovingObjectDetectionCloud()); //current pointcloud frame (latest)
-    mth.reset(new MovingObjectDetectionMethods());
+    ca.reset(new MovingObjectDetectionCloud(gp_limit,gp_leaf,bin_gap,min_cluster_size,max_cluster_size)); //previous pointcloud frame
+    cb.reset(new MovingObjectDetectionCloud(gp_limit,gp_leaf,bin_gap,min_cluster_size,max_cluster_size)); //current pointcloud frame (latest)
+    mth.reset(new MovingObjectDetectionMethods(volume_constraint,pde_lb,pde_ub));
     /*instantiate the shared pointers*/
 }
 
@@ -511,13 +514,13 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   /*recieves the synchronized incoming data and runs detection methods*/
 
   ca = cb; //update previous frame with the current frame
-  cb.reset(new MovingObjectDetectionCloud()); //reset current frame
+  cb.reset(new MovingObjectDetectionCloud(gp_limit,gp_leaf,bin_gap,min_cluster_size,max_cluster_size)); //reset current frame
 
   pcl::fromPCLPointCloud2(in_cloud, *(cb->raw_cloud)); //load latest pointcloud
   tf::poseMsgToTF(pose,cb->ps); //load latest pose
 
   cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal (hard coded)
-  //cb->groundPlaneRemoval(); //groud plane removal (voxel covariance)
+  //cb->groundPlaneRemoval(trim_x,trim_y); //groud plane removal (voxel covariance)
 
   cb->computeClusters(ec_distance_threshold,"single_cluster"); 
   /*compute clusters within the lastet pointcloud*/
@@ -558,13 +561,14 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 	/*calculate euclidian correspondence and apply the voulme constraint*/
 
 	//moving object detection methods (Local)
+  std::vector<double> param_vec;
   if(method_choice==1)
 	{
-    std::vector<double> param_vec = mth->getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
+    param_vec = mth->getPointDistanceEstimateVector(ca->clusters,cb->clusters,mp);
 	}
   else if(method_choice==2)
   {
-    std::vector<long> param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
+    param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
   }
   /*determine the movement scores for the corresponding clusters*/
 
@@ -574,11 +578,11 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 		double threshold;
     if(method_choice==1)
     {
-      threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/opc_normalization_factor;
+      threshold = pde_distance_threshold;
 		}
     else if(method_choice==2)
     {
-      threshold = pde_distance_estimate;
+      threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/opc_normalization_factor;
     }
 
 		if(param_vec[j]>threshold)
@@ -677,5 +681,166 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
   output.header.frame_id = f_id;
   /*assign the final filtered cloud to the 'output'*/
 
-  return true; //confirm that a new filterd cloud is available
+  return true; //confirm that a new filtered cloud is available
+}
+
+void MovingObjectRemoval::setVariables(std::string config_file_path)
+{
+  std::fstream config;
+  config.open(config_file_path);
+
+  if(!config.is_open())
+  {
+    std::cout<<"Couldnt open the file\n";
+    exit(0);
+  }
+
+  std::string line,parm1,parm2; //required string variables
+  while(std::getline(config,line)) //extract lines one by one
+  {
+    if(line[0]=='#' || line.length()<3)
+    {
+      continue;
+    }
+    parm1 = "";parm2="";
+    bool flag = true;
+    for(int ind=0;ind<line.length();ind++)
+    {
+      if(line[ind]==':')
+      {
+        flag = false;
+        continue;
+      }
+      if(flag)
+      {
+        parm1.push_back(line[ind]);
+      }
+      else
+      {
+        parm2.push_back(line[ind]);
+      }
+    }
+
+      std::cout<<parm1<<":";
+      if(parm1 == "gp_limit")
+      {
+        gp_limit = std::stof(parm2);
+        std::cout<<gp_limit;
+      }
+      else if(parm1 == "gp_leaf")
+      {
+        gp_leaf = std::stof(parm2);
+        std::cout<<gp_leaf;
+      }
+      else if(parm1 == "bin_gap")
+      {
+        bin_gap = std::stof(parm2);
+        std::cout<<bin_gap;
+      }
+      else if(parm1 == "min_cluster_size")
+      {
+        min_cluster_size = std::stol(parm2);
+        std::cout<<min_cluster_size;
+      }
+      else if(parm1 == "max_cluster_size")
+      {
+        max_cluster_size = std::stol(parm2);
+        std::cout<<max_cluster_size;
+      }
+      else if(parm1 == "volume_constraint")
+      {
+        volume_constraint = std::stof(parm2);
+        std::cout<<volume_constraint;
+      }
+      else if(parm1 == "pde_lb")
+      {
+        pde_lb = std::stof(parm2);
+        std::cout<<pde_lb;
+      }
+      else if(parm1 == "pde_ub")
+      {
+        pde_ub = std::stof(parm2);
+        std::cout<<pde_ub;
+      }
+      else if(parm1 == "output_topic")
+      {
+        output_topic = parm2;
+        std::cout<<output_topic;
+      }
+      else if(parm1 == "marker_topic")
+      {
+        marker_topic = parm2;
+        std::cout<<marker_topic;
+      }
+      else if(parm1 == "input_pointcloud_topic")
+      {
+        input_pointcloud_topic = parm2;
+        std::cout<<input_pointcloud_topic;
+      }
+      else if(parm1 == "input_odometry_topic")
+      {
+        input_odometry_topic = parm2;
+        std::cout<<input_odometry_topic;
+      }
+      else if(parm1 == "output_fid")
+      {
+        output_fid = parm2;
+        std::cout<<output_fid;
+      }
+      else if(parm1 == "debug_fid")
+      {
+        debug_fid = parm2;
+        std::cout<<debug_fid;
+      }
+      else if(parm1 == "leave_off_distance")
+      {
+        leave_off_distance = std::stof(parm2);
+        std::cout<<leave_off_distance;
+      }
+      else if(parm1 == "catch_up_distance")
+      {
+        catch_up_distance = std::stof(parm2);
+        std::cout<<catch_up_distance;
+      }
+      else if(parm1 == "trim_x")
+      {
+        trim_x = std::stof(parm2);
+        std::cout<<trim_x;
+      }
+      else if(parm1 == "trim_y")
+      {
+        trim_y = std::stof(parm2);
+        std::cout<<trim_y;
+      }
+      else if(parm1 == "trim_z")
+      {
+        trim_z = std::stof(parm2);
+        std::cout<<trim_z;
+      }
+      else if(parm1 == "ec_distance_threshold")
+      {
+        ec_distance_threshold = std::stof(parm2);
+        std::cout<<ec_distance_threshold;
+      }
+      else if(parm1 == "opc_normalization_factor")
+      {
+        opc_normalization_factor = std::stof(parm2);
+        std::cout<<opc_normalization_factor;
+      }
+      else if(parm1 == "pde_distance_threshold")
+      {
+        pde_distance_threshold = std::stof(parm2);
+        std::cout<<pde_distance_threshold;
+      }
+      else if(parm1 == "method_choice")
+      {
+        method_choice = std::stoi(parm2);
+        std::cout<<method_choice;
+      }
+      else
+      {
+        std::cout<<"Invalid parameter\n";
+      }
+      std::cout<<std::endl;
+  }
 }
