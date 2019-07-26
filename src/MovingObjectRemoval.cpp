@@ -1,3 +1,30 @@
+/*
+This version-4 of the Moving Object Removal package is supposed to implement the post processing step of
+the filter. The moving object detection algorithm takes a buffer of frames for detection of a moving
+cluster. This leads to accumulation of some noise in the registered map by any SLAM package. Although
+the removal of the moving objects from the frames helps stabelize the odometry estimation and ICP accuracy
+but the noise due the buffer frames accumulates noise in the registered map. This problem can be solved by
+removing the moving cluster from the map by tracking the trajectory of the cluster which was analysed by the
+algorithm for predicting it as a moving cluster.
+
+Thus it is required to track the bounding box and the trajectory waypoints of a cluster which is classified
+as moving. We can then remove points from the latest map at the trajectory waypoints with a volume equal to 
+that of the volume of bounding box of the cluster in the latest cloud. In this way the map can regularly be
+updated by removing the noise just accumulated before detecting moving clusters.
+
+This map update is supposed to be done inside the SLAM program. That will improve the ICP performance and
+maintain a map with least trace of the moving clusters. Updating map inside SLAM requires tinkering of the
+slam code.
+*/
+
+/*
+Dynamic parameterization and ground plane removal methods needs to be implemented from version-3 after
+completing the post processing methods.
+
+THIS VERSION IS NOT COMPLETE AND NEEDS TO IMPLMENT THE POST PROCESSING STEPS AS DESCRIBED IN THE ABOVE
+DESCRIPTION
+*/
+
 #include "MOR/MovingObjectRemoval.h"
 
 ////////////////////////////////////////////////////////////////////Helping Methods
@@ -305,6 +332,7 @@ MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_
     map_odom_sub.subscribe(nh, "/icp_odom", 1);
     sync_update.reset(new message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry>(map_pc_sub, map_odom_sub, 10));
     sync_update->registerCallback(boost::bind(&MovingObjectRemoval::mapUpdateSubscriber, this, _1, _2));
+    /*the generated map is supposed to be filtered from the accumulated noise*/
 
     ca.reset(new MovingObjectDetectionCloud());
     cb.reset(new MovingObjectDetectionCloud());
@@ -331,6 +359,10 @@ void MovingObjectRemoval::movingCloudObjectSubscriber(const sensor_msgs::PointCl
 
 int MovingObjectRemoval::recurseFindClusterChain(int col,int track,std::vector<pcl::PointXYZ> &tv)
 {
+	/*unlike the implementation in version-3, the recursive function adds the waypoint centroids of
+	the cluster trajectory to 'tv' vector. this keeps a track of the locations in the registered map
+	where the cluster has appered past in time.*/
+
   tv.push_back(centroid_track[col]->points[track]);
   if(col == corrs_vec.size())
   {
@@ -356,15 +388,24 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track,std::vector<p
 
 void MovingObjectRemoval::pushCentroid(std::vector<pcl::PointXYZ> &tv)
 {
+	/*if a moving cluster is detected it is pushed into the 'mo_vec' along with its trajectory
+	waypoints*/
+
 	for(int i=0;i<mo_vec.size();i++)
 	{
 		double dist = sqrt(pow(tv[moving_confidence-1].x-mo_vec[i].centroids[moving_confidence-1].x,2)+pow(tv[moving_confidence-1].y-mo_vec[i].centroids[moving_confidence-1].y,2)+pow(tv[moving_confidence-1].z-mo_vec[i].centroids[moving_confidence-1].z,2));
+		/*last point in 'tv' is the centroid of the moving cluster in the latest cloud*/
+
 		if(dist<0.2)
 		{
       mo_vec[i].centroids = tv;
+      /*if the cluster is already present in 'mo_vec' just update its trajectory. this is different from the version-3
+      implmentation where the centroid point was updated in the filtering step rather than the detection step*/
+
 			return;
 		}
 	}
+
 
 	MovingObjectCentroid moc(tv,static_confidence);
 	mo_vec.push_back(moc);
@@ -385,6 +426,8 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std
     centroid_track.push_back(ca_cc);
   }
   centroid_track.push_back(cb_cc);
+  /*centroid is tracked such that the previous locations of the moving cluster can be tracked and removed
+  from the generated map*/
 
   //std::cout<<corrs_vec.size()<<" "<<res_vec.size()<<" "<<centroid_track.size()<<std::endl;
 
@@ -521,5 +564,7 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 
 void MovingObjectRemoval::mapUpdateSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm)
 {
-
+	/*this function is supposed to update the map by removing the points along the trajectory of all moving
+	clusters present in 'mo_vec'. after updating the latest map the clean map needs to be updated inside the
+	SLAM program.*/
 }
