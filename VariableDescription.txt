@@ -10,6 +10,8 @@ method_choice: It is the choice of method for moving cloud detection. 1 is for u
 #ROS parameters
 output_topic: Topic on which the filtered pointcloud after removing the moving object is published.
 
+debug_topic: Topic on which the debug pointcloud data is published.
+
 marker_topic: Topic on which the visualization markers are published for debugging purpose.
 
 input_pointcloud_topic: The topic on which the LIDAR/RGBD sensor package publishes the pointcloud.
