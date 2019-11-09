@@ -358,6 +358,7 @@ std::vector<double> MovingObjectDetectionMethods::getPointDistanceEstimateVector
 			}
 		}
 		estimates.push_back(count/((c1[(*mp)[j].index_query]->points.size()+c2[(*mp)[j].index_match]->points.size())/2));
+		/*normalize 'count' with respect to the size of corresponding clusters*/
 	}
 	return estimates;
   /*return the movement scores*/
@@ -413,7 +414,7 @@ void MovingObjectRemoval::movingCloudObjectSubscriber(const sensor_msgs::PointCl
 int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
 {
   /*takes the correspondence map buffer index and result buffer index as initial parameter
-  and recurses till the end of all the correspondence available in the buffer. cluster chain
+  and recurses till the end of all the correspondence maps available in the buffer. cluster chain
   information is obtained from the correspondence map buffer 'corrs_vec'. consistency in the 
   cluster chain is known using the result buffer 'res_vec'. returns -1 if consistency fails
   or else returns the index of the moving cluster in the cluster collection 'clusters' in
@@ -694,7 +695,7 @@ void MovingObjectRemoval::setVariables(std::string config_file_path)
   {
     std::cout<<"Couldnt open the file\n";
     exit(0);
-  }
+  } //open config file
 
   std::string line,parm1,parm2; //required string variables
   while(std::getline(config,line)) //extract lines one by one
@@ -720,7 +721,7 @@ void MovingObjectRemoval::setVariables(std::string config_file_path)
       {
         parm2.push_back(line[ind]);
       }
-    }
+    } //extract lines "name_of_variable:value"
 
       std::cout<<parm1<<":";
       if(parm1 == "gp_limit")
@@ -845,8 +846,10 @@ void MovingObjectRemoval::setVariables(std::string config_file_path)
       }
       else
       {
-        std::cout<<"Invalid parameter\n";
+        std::cout<<"Invalid parameter found in config file\n";
+        exit(0);
       }
       std::cout<<std::endl;
+      /*assign values to the variables based on name*/
   }
 }

@@ -1,0 +1,65 @@
+----------------Moving Object Removal parameter description------------------------------------------
+
+#The package requires a configuration file that defines the values for the variables that are needed to be changed for the algorithm to run in different surroundings and with different sensors. These variables are picked by the program during the instantiation of the the MOR class such that the user dosent need to compile the code multiple times during algorithm tuning.
+
+
+#Detection algorithm choice
+method_choice: It is the choice of method for moving cloud detection. 1 is for using the pointcloud correspondence estimation and 2 for octree pointcloud change estimation. The best results that has beed observed is by using opc(method 2). The choice of method is highly dependent on the type of pointcloud data used.
+
+
+#ROS parameters
+output_topic: Topic on which the filtered pointcloud after removing the moving object is published.
+
+marker_topic: Topic on which the visualization markers are published for debugging purpose.
+
+input_pointcloud_topic: The topic on which the LIDAR/RGBD sensor package publishes the pointcloud.
+
+input_odometry_topic: The topic on which the IMU package publishes odometry.
+
+output_fid: The frame id of the filtered pointcloud being published.
+
+debug_fid: The frame id of the debug pointcloud being published.
+
+
+#Clustering parameters
+ec_distance_threshold: The threshold distance of clustering. This parameter is very important as it affects the clustering drastically with even very tiny change to its value. It needs to be tuned for different sensors and type of pointcloud used with the algorithm.
+
+min_cluster_size: The minimum number of points in present in a cluster. It is useful to tune for eleminating small noise from the pointcloud during clustering.
+
+max_cluster_size: The maximum number of points in a cluster. Sets limits to control cluster size.
+
+
+#Ground plane removal voxel covariance
+gp_leaf: The edge length of the voxel grid.
+
+bin_gap: The bin gap along the normal axis to the plane. Assume that the max Z coordiante value in point cloud is 2.21m and the min is -0.6m. If the bin_gap is 0.1m then the following bins will be created [-0.6,-0.5,-0.4,-0.3,-0.2,-0.1,0.0,0.1,0.2,....,2.0,2.1,2.2]
+
+
+#Ground plane removal hard coded
+gp_limit: The lowest z coordinate point in the pointcloud. This must be observed and tuned to remove the ground plane. Practically depends on the position of the sensor on the robot above ground.
+
+trim_x: Max x coordinate in pointcloud. The cloud becomes sparse as the distance of sampling from the sensor increases, it is important to trim the cloud within some range where the algorithm and clustering practically works.
+
+trim_y: Max y coordinate in pointcloud.
+
+trim_z: Max z coordinate in pointcloud.
+
+
+#Point distance estimate method parameters (needed when method_choice is 1)
+pde_lb: The correspondence distance filter lower limit.
+
+pde_ub: The correspondence distance filter upper limit.
+
+pde_distance_threshold: The moving score threshold to classify a cluster as moving. Increasing the value makes the algorithm more strict to detecting moving clusters. So higher is the value less is the number of false positives as the algorithm becomes less sensitive.
+
+
+#Octree pointcloud chance method parameters (needed when method_choice is 2)
+opc_normalization_factor: This value determines the threshold for the opc method. Increasing the value makes the algorithm less strict to detecting moving clusters. So higher is the value more is the number of false positives as the algorithm becomes more sensitive.
+
+
+#Cluster tracking prameters
+volume_constraint: This parameter controls the false positive correspondence results during the matching of the cluster centroids between two consecutive frames. Increasing the value makes the correspondence less sensitive. So higher is the value more is the number of false positives.
+
+leave_off_distance: If a cluster centroid being classified as moving matches to a cluster centroid that is at a distance more than leave_off_distance then it is assumed that this is a false positive correspondence and the cluster has not appered in the lastest frame. The value for this parameter depends on the surroundings and the type of pointcloud data used.
+
+catch_up_distance: A moving centroid is detected and it matches to an exixting detected centroid which is less than a catch_up_distance from it. Hence no new centroid is not added to the collection but rather the old one is updated with the new position of the centroid.
