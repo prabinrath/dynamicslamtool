@@ -103,7 +103,7 @@ class MovingObjectRemoval
 	float gp_limit,gp_leaf,bin_gap,volume_constraint,pde_lb,pde_ub,leave_off_distance,catch_up_distance,trim_x,trim_y,trim_z,ec_distance_threshold,pde_distance_threshold;
 	long min_cluster_size,max_cluster_size;
 	int method_choice,opc_normalization_factor;
-	std::string output_topic,marker_topic,input_pointcloud_topic,input_odometry_topic,output_fid,debug_fid;
+	std::string output_topic,debug_topic,marker_topic,input_pointcloud_topic,input_odometry_topic,output_fid,debug_fid;
 	/*configuration variables*/
 
 	std::vector<MovingObjectCentroid> mo_vec;
@@ -132,7 +132,7 @@ class MovingObjectRemoval
 
 	ros::NodeHandle& nh; //for visualization and internal sync
 	#ifdef VISUALIZE
-	ros::Publisher pub,marker_pub; //for visualization
+	ros::Publisher pub,debug_pub,marker_pub; //for visualization
 	#endif
 	#ifdef INTERNAL_SYNC //internal synchronization implementation
 	message_filters::Subscriber<sensor_msgs::PointCloud2> pc_sub;

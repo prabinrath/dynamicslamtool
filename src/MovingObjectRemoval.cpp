@@ -370,6 +370,7 @@ MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_
     /*ROS setup*/
     #ifdef VISUALIZE
     pub = nh.advertise<sensor_msgs::PointCloud2> (output_topic, 10);
+    debug_pub = nh.advertise<sensor_msgs::PointCloud2> (debug_topic, 10);
     marker_pub = nh.advertise<visualization_msgs::Marker>(marker_topic, 10);
     #endif
 
@@ -550,7 +551,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 	pcl::toPCLPointCloud2(*cb->cluster_collection,in_cloud);
 	pcl_conversions::fromPCL(in_cloud, output);
 	output.header.frame_id = debug_fid;
-	pub.publish(output);
+	debug_pub.publish(output);
   #endif
   		
 	pcl::CorrespondencesPtr mp(new pcl::Correspondences()); 
@@ -766,6 +767,11 @@ void MovingObjectRemoval::setVariables(std::string config_file_path)
       {
         output_topic = parm2;
         std::cout<<output_topic;
+      }
+      else if(parm1 == "debug_topic")
+      {
+        debug_topic = parm2;
+        std::cout<<debug_topic;
       }
       else if(parm1 == "marker_topic")
       {

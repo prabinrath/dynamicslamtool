@@ -3,6 +3,7 @@ method_choice:2
 
 #ROS parameters
 output_topic:/output
+debug_topic:/check
 marker_topic:/bbox
 input_pointcloud_topic:/velodyne_points
 input_odometry_topic:/camera/odom/sample
