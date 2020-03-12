@@ -52,7 +52,7 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5; //opacity
 
-  marker.lifetime = ros::Duration(0.2); //persistance duration
+  marker.lifetime = ros::Duration(2); //persistance duration
   //marker.lifetime = ros::Duration(10);
   return marker;
 }
@@ -481,14 +481,15 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std
   buffers. it checks for new moving clusters and adds them to the 'mo_vec'*/
 
   corrs_vec.push_back(mp);
-  if(res_vec.size()!=0)
+  if(res_vec.size()==0)
   {
-    res_vec.pop_back(); //deletes the top most result in the buffer
+  //   res_vec.pop_back(); //deletes the top most result in the buffer
+    res_vec.push_back(res_ca);
   }
-  res_vec.push_back(res_ca); //updates the buffer with the latest result
+  // res_vec.push_back(res_ca); //updates the buffer with the latest result
   res_vec.push_back(res_cb);
-  
-  if(res_vec.size()%moving_confidence==0)
+  // std::cout<<mo_vec.size()<<" "<<corrs_vec.size()<<" "<<res_vec.size()<<std::endl;
+  if(res_vec.size() >= moving_confidence)
   {
     for(int i=0;i<res_vec[0].size();i++)
     {
@@ -591,14 +592,14 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 
 		if(param_vec[j]>threshold)
 		{
-			ca->detection_results[(*mp)[j].index_query] = true;
+			//ca->detection_results[(*mp)[j].index_query] = true;
 			cb->detection_results[(*mp)[j].index_match] = true;
 			//marker_pub.publish(mark_cluster(cb->clusters[(*mp)[j].index_match],id++,debug_fid,"bounding_box",0.8,0.1,0.4));
 			//ct++;
 		}
 		else
 		{
-			ca->detection_results[(*mp)[j].index_query] = false;
+			//ca->detection_results[(*mp)[j].index_query] = false;
 			cb->detection_results[(*mp)[j].index_match] = false;
 		}
     /*assign the boolean results acording to thresholds. true for moving and false for static cluster*/
@@ -623,6 +624,9 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
   pcl::PointIndicesPtr moving_points(new pcl::PointIndices);
   /*stores the indices of the points belonging to the moving clusters within 'cloud'*/
 
+  // static int ct=0;
+  // ct+=mo_vec.size();
+  // std::cout<<ct<<std::endl;
 	for(int i=0;i<mo_vec.size();i++)
 	{
     /*iterate through all the moving cluster centroids*/

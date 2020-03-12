@@ -88,7 +88,7 @@ struct MovingObjectCentroid
 	pcl::PointXYZ centroid; //centroid of moving cluster
 	int confidence,max_confidence; //moving confidence score
 
-	MovingObjectCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good),max_confidence(n_good){} //constructor
+	MovingObjectCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good+1),max_confidence(n_good+1){} //constructor
 	bool decreaseConfidence(){confidence--;if(confidence==0){return true;}return false;} //returns true when confidence reduces to 0
 	void increaseConfidence(){if(confidence<max_confidence){confidence++;}} //increases confidence till 'max_confidence'
 };
