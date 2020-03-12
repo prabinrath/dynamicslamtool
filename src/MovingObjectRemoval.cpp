@@ -53,6 +53,7 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.a = 0.5; //opacity
 
   marker.lifetime = ros::Duration(0.2); //persistance duration
+  //marker.lifetime = ros::Duration(10);
   return marker;
 }
 
@@ -379,7 +380,7 @@ MovingObjectRemoval::MovingObjectRemoval(ros::NodeHandle nh_,std::string config_
     pc_sub.subscribe(nh, input_pointcloud_topic, 1);
     odom_sub.subscribe(nh, input_odometry_topic, 1);
     sync.reset(new message_filters::Synchronizer<MySyncPolicy>(MySyncPolicy(10),pc_sub,odom_sub));
-    sync->registerCallback(boost::bind(&MovingObjectRemoval::movingCloudObjectSubscriber, this, _1, _2));
+    sync->registerCallback(&MovingObjectRemoval::movingCloudObjectSubscriber, this);
     /*internal message synchronization using ROS Approximate Time policy*/
     #endif
 
@@ -573,7 +574,8 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
     param_vec = mth->getClusterPointcloudChangeVector(ca->clusters,cb->clusters,mp,0.1);
   }
   /*determine the movement scores for the corresponding clusters*/
-
+  // int id=1;
+  // static int ct = 0;
 	for(int j=0;j<mp->size();j++)
 	{
 		//std::cout<<"{"<<(*mp)[j].index_query<<"->"<<(*mp)[j].index_match<<"} Fit Score: "<<(*mp)[j].distance<<" Moving_Score: "<<param_vec[j]<<std::endl;
@@ -591,6 +593,8 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 		{
 			ca->detection_results[(*mp)[j].index_query] = true;
 			cb->detection_results[(*mp)[j].index_match] = true;
+			//marker_pub.publish(mark_cluster(cb->clusters[(*mp)[j].index_match],id++,debug_fid,"bounding_box",0.8,0.1,0.4));
+			//ct++;
 		}
 		else
 		{
@@ -599,6 +603,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 		}
     /*assign the boolean results acording to thresholds. true for moving and false for static cluster*/
 	}
+	// std::cout<<ct<<std::endl;
 	checkMovingClusterChain(mp,ca->detection_results,cb->detection_results);
   /*submit the results to update the buffers*/
   }
