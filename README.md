@@ -27,3 +27,15 @@ void dataSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msg
    }
 }
 ```
+## Results
+Moving object detection from Sample Image 1 (KITTI campus dataset)
+![Kitti result 1](results/kitti1_detect.png)
+
+Removed moving objects from Sample Image 1 (KITTI campus dataset)
+![Kitti result 1](results/kitti1_removal.png)
+
+Moving object detection from Sample Image 2 (KITTI campus dataset)
+![Kitti result 2](results/kitti2_detect.png)
+
+Removed moving objects from Sample Image 2 (KITTI campus dataset)
+![Kitti result 2](results/kitti2_removal.png)
