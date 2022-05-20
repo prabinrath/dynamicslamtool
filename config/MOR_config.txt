@@ -8,12 +8,12 @@ marker_topic:/bbox
 input_pointcloud_topic:/velodyne_points
 input_odometry_topic:/camera/odom/sample
 output_fid:/filtered
-debug_fid:/debug
+debug_fid:livox_frame
 
 #Clustering parameters
 ec_distance_threshold:0.11
 min_cluster_size:200
-max_cluster_size:35000
+max_cluster_size:3500
 
 #Ground plane removal voxel covariance
 gp_leaf:0.1

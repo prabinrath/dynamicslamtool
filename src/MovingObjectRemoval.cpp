@@ -1,4 +1,5 @@
 #include "MOR/MovingObjectRemoval.h"
+#include "DBSCAN/DBSCAN_kdtree.h"
 
 //'xyz' -> refers to the variable with name xyz
 
@@ -209,15 +210,20 @@ void MovingObjectDetectionCloud::computeClusters(float distance_threshold, std::
 	cluster_collection.reset(new pcl::PointCloud<pcl::PointXYZI>);
 	#endif
   /*initialize and clear the required variables*/
-
+    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
+    tree->setInputCloud(cloud);
   	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+    // DBSCANKdtreeCluster<pcl::PointXYZI> ec;
+    // ec.setCorePointMinPts(20);
+    // ec.setSearchMethod(tree);
+
   	ec.setClusterTolerance(distance_threshold);
   	ec.setMinClusterSize(min_cluster_size);
-  	ec.setMaxClusterSize(max_cluster_size);
+  	ec.setMaxClusterSize(max_cluster_size);    
   	ec.setInputCloud(cloud);
   	ec.extract(cluster_indices);
 	  /*euclidian clustering*/
-
+    
   	for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
   	{
   		pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>); //temporary variable
@@ -241,6 +247,8 @@ void MovingObjectDetectionCloud::computeClusters(float distance_threshold, std::
 	    pcl::PointXYZ centroid;
 	    centroid.x = temp[0]; centroid.y = temp[1]; centroid.z = temp[2];
 	    centroid_collection->points.push_back(centroid); //add the centroid to a collection vector
+      // std::cout<<centroid.x<<" "<<centroid.y<<" "<<centroid.z<<std::endl;
+      // std::cout<<cloud_cluster->points.size ()<<"sz\n";
   	}
 
   centroid_collection->width = centroid_collection->points.size();
@@ -521,11 +529,12 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   cb.reset(new MovingObjectDetectionCloud(gp_limit,gp_leaf,bin_gap,min_cluster_size,max_cluster_size)); //reset current frame
 
   pcl::fromPCLPointCloud2(in_cloud, *(cb->raw_cloud)); //load latest pointcloud
-  tf::poseMsgToTF(pose,cb->ps); //load latest pose
+  //tf::poseMsgToTF(pose,cb->ps); //load latest pose
 
-  cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal (hard coded)
+  //cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal (hard coded)
   //cb->groundPlaneRemoval(trim_x,trim_y); //groud plane removal (voxel covariance)
 
+  cb->cloud = cb->raw_cloud; // Only when Ground Plane Removal is disabled 
   cb->computeClusters(ec_distance_threshold,"single_cluster"); 
   /*compute clusters within the lastet pointcloud*/
 
@@ -533,22 +542,22 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 
   if(ca->init  == true && cb->init == true)
   {
-    tf::Transform t = (cb->ps).inverseTimes(ca->ps); 
+    // tf::Transform t = (cb->ps).inverseTimes(ca->ps); 
     /*calculate transformation matrix between previous and current pose. 't' transforms a point
     from the previous pose to the current pose*/
 
-    pcl::PointCloud<pcl::PointXYZ> temp = *ca->centroid_collection;
-	  pcl_ros::transformPointCloud(temp,*ca->centroid_collection,t);
+    // pcl::PointCloud<pcl::PointXYZ> temp = *ca->centroid_collection;
+	  // pcl_ros::transformPointCloud(temp,*ca->centroid_collection,t);
     /*transform the previous centroid collection with respect to 't'*/
 
-	for(int i=0;i<ca->clusters.size();i++)
-	{
-    /*transform the clusters in the collection vector of the previous frame with respect to 't'*/
+	// for(int i=0;i<ca->clusters.size();i++)
+	// {
+  //   /*transform the clusters in the collection vector of the previous frame with respect to 't'*/
 
-		pcl::PointCloud<pcl::PointXYZI> temp;
-		temp = *ca->clusters[i];
-	  pcl_ros::transformPointCloud(temp,*ca->clusters[i],t);
-	}
+	// 	pcl::PointCloud<pcl::PointXYZI> temp;
+	// 	temp = *ca->clusters[i];
+	//   pcl_ros::transformPointCloud(temp,*ca->clusters[i],t);
+	// }
 
   #ifdef VISUALIZE //visualize the cluster collection if VISUALIZE flag is defined
 	pcl::toPCLPointCloud2(*cb->cluster_collection,in_cloud);
@@ -670,26 +679,26 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 		}
 	}
 
-  pcl::PointCloud<pcl::PointXYZI>::Ptr f_cloud(new pcl::PointCloud<pcl::PointXYZI>);
-  pcl::ExtractIndices<pcl::PointXYZI> extract;
-  extract.setInputCloud(cb->cloud);
-  extract.setIndices(moving_points);
-  extract.setNegative(true);
-  extract.filter(*f_cloud);
+  // pcl::PointCloud<pcl::PointXYZI>::Ptr f_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+  // pcl::ExtractIndices<pcl::PointXYZI> extract;
+  // extract.setInputCloud(cb->cloud);
+  // extract.setIndices(moving_points);
+  // extract.setNegative(true);
+  // extract.filter(*f_cloud);
   /*extract the moving clusters from 'cloud' and assign the filtered cloud to 'f_cloud'*/
 
-  for(int i=0;i<cb->gp_indices->size();i++)
-  {
-    f_cloud->points.push_back(cb->raw_cloud->points[cb->gp_indices->at(i)]);
-  }
-  f_cloud->width = f_cloud->points.size();
-  f_cloud->height = 1;
-  f_cloud->is_dense = true;
+  // for(int i=0;i<cb->gp_indices->size();i++)
+  // {
+  //   f_cloud->points.push_back(cb->raw_cloud->points[cb->gp_indices->at(i)]);
+  // }
+  // f_cloud->width = f_cloud->points.size();
+  // f_cloud->height = 1;
+  // f_cloud->is_dense = true;
   /*merge the ground plane to the filtered cloud*/
 
-  pcl::toPCLPointCloud2(*f_cloud,out_cloud);
-  pcl_conversions::fromPCL(out_cloud, output);
-  output.header.frame_id = f_id;
+  // pcl::toPCLPointCloud2(*f_cloud,out_cloud);
+  // pcl_conversions::fromPCL(out_cloud, output);
+  // output.header.frame_id = f_id;
   /*assign the final filtered cloud to the 'output'*/
 
   return true; //confirm that a new filtered cloud is available
