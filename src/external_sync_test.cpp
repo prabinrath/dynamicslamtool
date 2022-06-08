@@ -3,23 +3,8 @@
 ros::Publisher pub;
 
 boost::shared_ptr<MovingObjectRemoval> mor;
-
-void moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm)
-{
-	clock_t begin_time = clock();
-  std::cout<<"-----------------------------------------------------\n";
-	pcl::PCLPointCloud2 cloud;
-	pcl_conversions::toPCL(*input, cloud);
-
-	mor->pushRawCloudAndPose(cloud,odm->pose.pose);
-	if(mor->filterCloud(cloud,"/filtered"))
-	{
-		pub.publish(mor->output);
-	}
-
-  std::cout<<1000.0*(clock()-begin_time)/CLOCKS_PER_SEC<<std::endl;
-  std::cout<<"-----------------------------------------------------\n";
-}
+int buffer_counter = 0;
+pcl::PCLPointCloud2 merged_cloud;
 
 void duno_moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input)
 {
@@ -28,16 +13,28 @@ void duno_moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input)
 	pcl::PCLPointCloud2 cloud;
 	pcl_conversions::toPCL(*input, cloud);
 
+  if (buffer_counter == 0){
+    merged_cloud = cloud;
+    buffer_counter++;
+    return;
+  }
+  else if (buffer_counter < 15){
+    merged_cloud += cloud;
+    buffer_counter++;
+    return;
+  }
+
   geometry_msgs::Pose zero_pose;
   zero_pose.position.x = 0; zero_pose.position.y = 0; zero_pose.position.z = 0;
   zero_pose.orientation.x = 0; zero_pose.orientation.y = 0; zero_pose.orientation.z = 0; zero_pose.orientation.w = 1;
 
-	mor->pushRawCloudAndPose(cloud,zero_pose);
+	mor->pushRawCloudAndPose(merged_cloud,zero_pose);
 	if(mor->filterCloud(cloud,"/filtered"))
 	{
 		//pub.publish(mor->output);
 	}
 
+  buffer_counter = 0;
   std::cout<<1000.0*(clock()-begin_time)/CLOCKS_PER_SEC<<std::endl;
   std::cout<<"-----------------------------------------------------\n";
 }
@@ -57,7 +54,7 @@ int main (int argc, char** argv)
 
   ros::Subscriber sub = nh.subscribe("/livox/lidar", 1, duno_moving_object_test);
 
-  mor.reset(new MovingObjectRemoval(nh,"/mnt/c/Ubuntu/catkin_ws/src/dynamicslamtool/config/MOR_config.txt",3,2));
+  mor.reset(new MovingObjectRemoval(nh,"/home/prabin/catkin_ws/src/dynamicslamtool/config/MOR_config.txt",3,2));
 
   ros::spin();
   #endif

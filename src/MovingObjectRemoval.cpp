@@ -53,7 +53,7 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5; //opacity
 
-  marker.lifetime = ros::Duration(2); //persistance duration
+  marker.lifetime = ros::Duration(1); //persistance duration
   //marker.lifetime = ros::Duration(10);
   return marker;
 }
@@ -531,10 +531,10 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   pcl::fromPCLPointCloud2(in_cloud, *(cb->raw_cloud)); //load latest pointcloud
   //tf::poseMsgToTF(pose,cb->ps); //load latest pose
 
-  //cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal (hard coded)
+  cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal (hard coded)
   //cb->groundPlaneRemoval(trim_x,trim_y); //groud plane removal (voxel covariance)
 
-  cb->cloud = cb->raw_cloud; // Only when Ground Plane Removal is disabled 
+  // cb->cloud = cb->raw_cloud; // Only when Ground Plane Removal is disabled 
   cb->computeClusters(ec_distance_threshold,"single_cluster"); 
   /*compute clusters within the lastet pointcloud*/
 
@@ -560,9 +560,10 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 	// }
 
   #ifdef VISUALIZE //visualize the cluster collection if VISUALIZE flag is defined
-	pcl::toPCLPointCloud2(*cb->cluster_collection,in_cloud);
+	pcl::toPCLPointCloud2(*cb->cloud,in_cloud);
 	pcl_conversions::fromPCL(in_cloud, output);
 	output.header.frame_id = debug_fid;
+  output.header.stamp = ros::Time::now();
 	debug_pub.publish(output);
   #endif
   		
@@ -646,10 +647,6 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 		{
       /*search for the actual centroid in the centroid collection of the latest frame*/
 
-      #ifdef VISUALIZE //visualize bounding box to show the moving cluster if VISUALIZE flag is defined
-			marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,debug_fid,"bounding_box",rd,gd,bd));
-			#endif
-
       for(int j=0;j<cb->cluster_indices[pointIdxNKNSearch[0]].indices.size();j++)
       {
         /*add the indices of the moving clusters in 'cloud' to 'moving_points'*/
@@ -674,7 +671,12 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
         /*update the moving centroid with the latest centroid of the moving cluster*/
 
 				mo_vec[i].increaseConfidence(); //increase the moving confidence
+
+        #ifdef VISUALIZE //visualize bounding box to show the moving cluster if VISUALIZE flag is defined
+        marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,debug_fid,"bounding_box",rd,gd,bd));
+        #endif
 			}
+
 			id++;
 		}
 	}
