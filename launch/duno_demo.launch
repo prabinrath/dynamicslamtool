@@ -1,0 +1,5 @@
+<launch>
+    <node name="static_transform_publisher" pkg="tf" type="static_transform_publisher" args="-10 0 4 0 0.08 0 map livox_frame 10" respawn="false" />
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dynamic_slam_tool)/rviz/duno.rviz" respawn="false" />
+    <node name="mov_e" pkg="dynamic_slam_tool" type="mov_e" respawn="false" output="screen" />
+</launch>

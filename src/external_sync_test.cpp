@@ -54,7 +54,8 @@ int main (int argc, char** argv)
 
   ros::Subscriber sub = nh.subscribe("/livox/lidar", 1, duno_moving_object_test);
 
-  mor.reset(new MovingObjectRemoval(nh,"/home/prabin/catkin_ws/src/dynamicslamtool/config/MOR_config.txt",3,2));
+  std::string path = ros::package::getPath("dynamic_slam_tool");
+  mor.reset(new MovingObjectRemoval(nh, path + "/config/MOR_config.txt",3,2));
 
   ros::spin();
   #endif

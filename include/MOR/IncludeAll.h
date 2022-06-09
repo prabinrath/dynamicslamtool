@@ -1,5 +1,7 @@
 /*Includes all the required headers for the package*/
 #include <ros/ros.h>
+#include <ros/package.h>
+#include <ros/console.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/Quaternion.h>
 #include <geometry_msgs/Pose.h>
