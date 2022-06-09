@@ -463,22 +463,25 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
 void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
 {
   /*function to check and push the moving centroid to the confirmed moving cluster vector*/
-
+  // std::cout<< pt.x << " " << pt.y << " " << pt.z << "\n\n";
 	for(int i=0;i<mo_vec.size();i++)
 	{
     /*check if the moving centroid has already been added to the 'mo_vec' previously*/
 		double dist = sqrt(pow(pt.x-mo_vec[i].centroid.x,2)+pow(pt.y-mo_vec[i].centroid.y,2)+pow(pt.z-mo_vec[i].centroid.z,2));
-		if(dist<catch_up_distance)
-		{
+    if(dist<catch_up_distance)
+		{      
       /*if found a centroid close to the new moving centroid then return, as no additional 
       action is required*/
 			return;
 		}
+    // std::cout<<dist<<std::endl;
+    // std::cout<< mo_vec[i].centroid.x << " " << mo_vec[i].centroid.y << " " << mo_vec[i].centroid.z << std::endl;
 	}
 
+  // std::cout<<"Adding Centroid"<<std::endl;
 	MovingObjectCentroid moc(pt,static_confidence);
   /*assign static confidence to 'moc' that determines it's persistance in 'mo_vec'*/
-
+  moc.id = ros::Time::now().toSec();
 	mo_vec.push_back(moc);
   /*if not present then add the new cluster centroid to the 'mo_vec'*/
 }
@@ -629,16 +632,22 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
   /*use kdtree for searching the moving cluster centroid within 'centroid_collection' of the
   latest frame*/
 
-	float rd=0.8,gd=0.1,bd=0.4;int id = 1; //colour variables for visualizing red bounding box
+	// float rd=0.8,gd=0.1,bd=0.4;
 
   pcl::PointIndicesPtr moving_points(new pcl::PointIndices);
   /*stores the indices of the points belonging to the moving clusters within 'cloud'*/
 
-  // static int ct=0;
-  // ct+=mo_vec.size();
-  // std::cout<<ct<<std::endl;
+  // std::cout<< mo_vec.size() << std::endl;
 	for(int i=0;i<mo_vec.size();i++)
-	{
+	{    
+    mo_vec[i].marker_color[0] = 0.0; mo_vec[i].marker_color[1] = 0.5; mo_vec[i].marker_color[2] = 0.0;
+    for(int k=0;k<mo_vec.size();k++){
+      double dist = sqrt(pow(mo_vec[k].centroid.x-mo_vec[i].centroid.x,2)+pow(mo_vec[k].centroid.y-mo_vec[i].centroid.y,2)+pow(mo_vec[k].centroid.z-mo_vec[i].centroid.z,2));
+      if (dist < 1.0 && k != i){
+        mo_vec[i].marker_color[0] = 0.5; mo_vec[i].marker_color[1] = 0.0; mo_vec[i].marker_color[2] = 0.0;
+        std::cout<<"ALERT: Potential Collision - Proximity is " << dist << " meters."<<std::endl;
+      }       
+    }
     /*iterate through all the moving cluster centroids*/
 
 		std::vector<int> pointIdxNKNSearch(1);
@@ -656,7 +665,7 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 			if(cb->detection_results[pointIdxNKNSearch[0]] == false || pointNKNSquaredDistance[0]>leave_off_distance)
 			{
         /*decrease the moving confidence if the cluster is found to be static in the latest results or
-        if the cluster dosen't appear in the current frame*/
+        if the cluster doesn't appear in the current frame*/
 
 				if(mo_vec[i].decreaseConfidence())
 				{
@@ -673,11 +682,10 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 				mo_vec[i].increaseConfidence(); //increase the moving confidence
 
         #ifdef VISUALIZE //visualize bounding box to show the moving cluster if VISUALIZE flag is defined
-        marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]],id,debug_fid,"bounding_box",rd,gd,bd));
+        marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]], mo_vec[i].id, debug_fid, "bounding_box",
+          mo_vec[i].marker_color[0], mo_vec[i].marker_color[1], mo_vec[i].marker_color[2]));
         #endif
 			}
-
-			id++;
 		}
 	}
 

@@ -36,4 +36,4 @@ opc_normalization_factor:20
 #Cluster tracking prameters
 volume_constraint:0.3
 leave_off_distance:0.5
-catch_up_distance:0.3
+catch_up_distance:1.0

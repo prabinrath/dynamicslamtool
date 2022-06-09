@@ -9,7 +9,7 @@ pcl::PCLPointCloud2 merged_cloud;
 void duno_moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input)
 {
 	clock_t begin_time = clock();
-  std::cout<<"-----------------------------------------------------\n";
+  // std::cout<<"-----------------------------------------------------\n";
 	pcl::PCLPointCloud2 cloud;
 	pcl_conversions::toPCL(*input, cloud);
 
@@ -35,8 +35,8 @@ void duno_moving_object_test(const sensor_msgs::PointCloud2ConstPtr& input)
 	}
 
   buffer_counter = 0;
-  std::cout<<1000.0*(clock()-begin_time)/CLOCKS_PER_SEC<<std::endl;
-  std::cout<<"-----------------------------------------------------\n";
+  // std::cout<<1000.0*(clock()-begin_time)/CLOCKS_PER_SEC<<std::endl;
+  // std::cout<<"-----------------------------------------------------\n";
 }
 
 int main (int argc, char** argv)
