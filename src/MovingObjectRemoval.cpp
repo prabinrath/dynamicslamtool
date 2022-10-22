@@ -64,7 +64,36 @@ void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
 {
     /*Hard coded ground plane removal*/
 
-	  pcl::PassThrough<pcl::PointXYZI> pass;
+	  // pcl::PassThrough<pcl::PointXYZI> pass;
+    // pass.setInputCloud(raw_cloud);
+    // pass.setFilterFieldName("x");
+    // pass.setFilterLimits(-x, x);
+    // pass.filter(*raw_cloud);
+    // pass.setInputCloud(raw_cloud);
+    // pass.setFilterFieldName("y");
+    // pass.setFilterLimits(-y, y);
+    // pass.filter(*raw_cloud);
+    // /*The pointcloud becomes more sparse as the distance of sampling from the lidar increases.
+    // So it has been trimmed in X,Y and Z directions*/
+
+    // pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
+    // cropBoxFilter.setInputCloud(raw_cloud);
+    // Eigen::Vector4f min_pt(-x, -y, gp_limit, 1.0f);
+    // Eigen::Vector4f max_pt(x, y, z, 1.0f);
+    // cropBoxFilter.setMin(min_pt);
+    // cropBoxFilter.setMax(max_pt);
+    // //cropBoxFilter.setNegative(true);
+    // cropBoxFilter.filter(*cloud); //'cloud' stores the pointcloud after removing ground plane
+    // gp_indices = cropBoxFilter.getRemovedIndices();
+    /*ground plane is removed from 'raw_cloud' and their indices are stored in gp_indices*/
+
+    /*RANSAC ground plane removal*/
+
+    pcl::PassThrough<pcl::PointXYZI> pass;
+    pass.setInputCloud(raw_cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-z, z);
+    pass.filter(*raw_cloud);
     pass.setInputCloud(raw_cloud);
     pass.setFilterFieldName("x");
     pass.setFilterLimits(-x, x);
@@ -73,19 +102,38 @@ void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
     pass.setFilterFieldName("y");
     pass.setFilterLimits(-y, y);
     pass.filter(*raw_cloud);
-    /*The pointcloud becomes more sparse as the distance of sampling from the lidar increases.
-    So it has been trimmed in X,Y and Z directions*/
 
-    pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
-    cropBoxFilter.setInputCloud(raw_cloud);
-    Eigen::Vector4f min_pt(-x, -y, gp_limit, 1.0f);
-    Eigen::Vector4f max_pt(x, y, z, 1.0f);
-    cropBoxFilter.setMin(min_pt);
-    cropBoxFilter.setMax(max_pt);
-    //cropBoxFilter.setNegative(true);
-    cropBoxFilter.filter(*cloud); //'cloud' stores the pointcloud after removing ground plane
-    gp_indices = cropBoxFilter.getRemovedIndices();
-    /*ground plane is removed from 'raw_cloud' and their indices are stored in gp_indices*/
+    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+
+    pcl::SACSegmentation<pcl::PointXYZI> seg;
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC );
+    // Eigen::Vector3f axis = Eigen::Vector3f(0.0,0.0,1.0);
+    // seg.setAxis(axis);
+    // seg.setEpsAngle(  10.0f * (3.14/180.0f) );
+    seg.setMaxIterations(500);
+    seg.setDistanceThreshold(0.5);
+
+    seg.setInputCloud(raw_cloud);
+    seg.segment(*inliers, *coefficients);
+    
+    if (inliers->indices.size() == 0)
+    {
+      PCL_ERROR ("Could not estimate a planar model for the given dataset.");
+    }
+
+    pcl::PointIndicesPtr ground_plane(new pcl::PointIndices);
+    for (int i = 0; i < inliers->indices.size (); i++)
+    {
+         ground_plane->indices.push_back(inliers->indices[i]);
+    }
+    pcl::ExtractIndices<pcl::PointXYZI> extract;
+    extract.setInputCloud(raw_cloud);
+    extract.setIndices(ground_plane);
+    extract.setNegative(true);
+    extract.filter(*cloud);
 }
 
 void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y)
@@ -534,7 +582,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   pcl::fromPCLPointCloud2(in_cloud, *(cb->raw_cloud)); //load latest pointcloud
   //tf::poseMsgToTF(pose,cb->ps); //load latest pose
 
-  cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal (hard coded)
+  cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal
   //cb->groundPlaneRemoval(trim_x,trim_y); //groud plane removal (voxel covariance)
 
   // cb->cloud = cb->raw_cloud; // Only when Ground Plane Removal is disabled 
@@ -643,7 +691,7 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
     mo_vec[i].marker_color[0] = 0.0; mo_vec[i].marker_color[1] = 0.5; mo_vec[i].marker_color[2] = 0.0;
     for(int k=0;k<mo_vec.size();k++){
       double dist = sqrt(pow(mo_vec[k].centroid.x-mo_vec[i].centroid.x,2)+pow(mo_vec[k].centroid.y-mo_vec[i].centroid.y,2)+pow(mo_vec[k].centroid.z-mo_vec[i].centroid.z,2));
-      if (dist < 1.0 && k != i){
+      if (dist < 2.0 && k != i){
         mo_vec[i].marker_color[0] = 0.5; mo_vec[i].marker_color[1] = 0.0; mo_vec[i].marker_color[2] = 0.0;
         std::cout<<"ALERT: Potential Collision - Proximity is " << dist << " meters."<<std::endl;
       }       
