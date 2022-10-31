@@ -260,10 +260,10 @@ void MovingObjectDetectionCloud::computeClusters(float distance_threshold, std::
   /*initialize and clear the required variables*/
     pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
     tree->setInputCloud(cloud);
-  	pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
-    // DBSCANKdtreeCluster<pcl::PointXYZI> ec;
-    // ec.setCorePointMinPts(20);
-    // ec.setSearchMethod(tree);
+  	// pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+    DBSCANKdtreeCluster<pcl::PointXYZI> ec;
+    ec.setCorePointMinPts(20);
+    ec.setSearchMethod(tree);
 
   	ec.setClusterTolerance(distance_threshold);
   	ec.setMinClusterSize(min_cluster_size);
@@ -468,7 +468,7 @@ void MovingObjectRemoval::movingCloudObjectSubscriber(const sensor_msgs::PointCl
   std::cout<<"-----------------------------------------------------\n";
 }
 
-int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
+int MovingObjectRemoval::recurseFindClusterChain(int col,int track, int& prev_ind)
 {
   /*takes the correspondence map buffer index and result buffer index as initial parameter
   and recurses till the end of all the correspondence maps available in the buffer. cluster chain
@@ -482,10 +482,12 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
     /*break condition for the recursion. return the index of the moving cluster*/
     return track;
   }
+  // Track previous index for KF
+  prev_ind = track;
 
   for(int j=0;j<corrs_vec[col]->size();j++)
   {
-    /*search all the unit correspondeces within the correspondence map in 'col' index of the buffer*/
+    /*search all the unit correspondences within the correspondence map in 'col' index of the buffer*/
     
     if((*corrs_vec[col])[j].index_query == track)
     {
@@ -495,7 +497,7 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
       {
         /*the mapping index must have a true positive value in the result buffer*/
 
-        return recurseFindClusterChain(col+1,(*corrs_vec[col])[j].index_match);
+        return recurseFindClusterChain(col+1,(*corrs_vec[col])[j].index_match, prev_ind);
         /*if both key and mapped index have true positive value then move for the next correspondence
         map in the buffer*/
       }
@@ -508,8 +510,9 @@ int MovingObjectRemoval::recurseFindClusterChain(int col,int track)
   return -1;
 }
 
-void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
+void MovingObjectRemoval::pushCentroid(const int prev_ind, const int curr_ind)
 {
+  pcl::PointXYZ pt = cb->centroid_collection->points[curr_ind];
   /*function to check and push the moving centroid to the confirmed moving cluster vector*/
   // std::cout<< pt.x << " " << pt.y << " " << pt.z << "\n\n";
 	for(int i=0;i<mo_vec.size();i++)
@@ -518,6 +521,15 @@ void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
 		double dist = sqrt(pow(pt.x-mo_vec[i].centroid.x,2)+pow(pt.y-mo_vec[i].centroid.y,2)+pow(pt.z-mo_vec[i].centroid.z,2));
     if(dist<catch_up_distance)
 		{      
+      // Update KF
+      Eigen::Matrix<float,2,1> curr_state;
+      curr_state << pt.x, pt.y;
+      std::cout<<"GT "<<pt.x<<" "<<pt.y<<"\n";
+      std::cout<<"KF "<<mo_vec[i].centroid.x<<" "<<mo_vec[i].centroid.y<<"\n";
+      mo_vec[i].kf->update(curr_state);
+      mo_vec[i].centroid.x = mo_vec[i].kf->state[0]; 
+      mo_vec[i].centroid.y = mo_vec[i].kf->state[1];
+      mo_vec[i].centroid.z = pt.z;
       /*if found a centroid close to the new moving centroid then return, as no additional 
       action is required*/
 			return;
@@ -527,8 +539,23 @@ void MovingObjectRemoval::pushCentroid(pcl::PointXYZ pt)
 	}
 
   // std::cout<<"Adding Centroid"<<std::endl;
-	MovingObjectCentroid moc(pt,static_confidence);
+	MovingObjectCentroid moc(static_confidence, 0.1);
   /*assign static confidence to 'moc' that determines it's persistance in 'mo_vec'*/
+
+  // Initialize KF and update it  
+  Eigen::Matrix<float,4,1> init_state;
+  init_state << ca->centroid_collection->points[prev_ind].x, ca->centroid_collection->points[prev_ind].y, 0, 0;
+  moc.kf->set_initial_state(init_state);
+  Eigen::Matrix<float,1,1> u;
+  u.setZero();
+  moc.kf->predict(u);
+  Eigen::Matrix<float,2,1> curr_state;
+  curr_state << pt.x, pt.y;
+  moc.kf->update(curr_state);
+  moc.centroid.x = moc.kf->state[0]; 
+  moc.centroid.y = moc.kf->state[1];
+  moc.centroid.z = pt.z;
+
   moc.id = ros::Time::now().toSec();
 	mo_vec.push_back(moc);
   /*if not present then add the new cluster centroid to the 'mo_vec'*/
@@ -542,10 +569,8 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std
   corrs_vec.push_back(mp);
   if(res_vec.size()==0)
   {
-  //   res_vec.pop_back(); //deletes the top most result in the buffer
     res_vec.push_back(res_ca);
   }
-  // res_vec.push_back(res_ca); //updates the buffer with the latest result
   res_vec.push_back(res_cb);
   // std::cout<<mo_vec.size()<<" "<<corrs_vec.size()<<" "<<res_vec.size()<<std::endl;
   if(res_vec.size() >= moving_confidence)
@@ -556,14 +581,15 @@ void MovingObjectRemoval::checkMovingClusterChain(pcl::CorrespondencesPtr mp,std
       {
         /*look to the historical data in the result buffer and check the clusters with true positive
         value in the first result vector within the buffer*/
-
-      	int found_moving_index = recurseFindClusterChain(0,i);
+        int prev_ind;
+      	int found_moving_index = recurseFindClusterChain(0,i, prev_ind);
         /*run the recursive test to find a potential cluster chain form the buffers*/
-
+        
         if(found_moving_index != -1)
-        {
+        {          
+          // std::cout<<prev_ind<<" "<<found_moving_index<<"\n";
           /*if found push the confirmed moving centroid into 'mo_vec'*/
-          pushCentroid(cb->centroid_collection->points[found_moving_index]);
+          pushCentroid(prev_ind, found_moving_index);
         }
       }
     }
@@ -587,7 +613,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 
   // cb->cloud = cb->raw_cloud; // Only when Ground Plane Removal is disabled 
   cb->computeClusters(ec_distance_threshold,"single_cluster"); 
-  /*compute clusters within the lastet pointcloud*/
+  /*compute clusters within the latest pointcloud*/
 
   cb->init = true; //confirm the frame for detection
 
@@ -680,9 +706,7 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
   /*use kdtree for searching the moving cluster centroid within 'centroid_collection' of the
   latest frame*/
 
-	// float rd=0.8,gd=0.1,bd=0.4;
-
-  pcl::PointIndicesPtr moving_points(new pcl::PointIndices);
+  // pcl::PointIndicesPtr moving_points(new pcl::PointIndices);
   /*stores the indices of the points belonging to the moving clusters within 'cloud'*/
 
   // std::cout<< mo_vec.size() << std::endl;
@@ -704,11 +728,11 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 		{
       /*search for the actual centroid in the centroid collection of the latest frame*/
 
-      for(int j=0;j<cb->cluster_indices[pointIdxNKNSearch[0]].indices.size();j++)
-      {
-        /*add the indices of the moving clusters in 'cloud' to 'moving_points'*/
-        moving_points->indices.push_back(cb->cluster_indices[pointIdxNKNSearch[0]].indices[j]);
-      }
+      // for(int j=0;j<cb->cluster_indices[pointIdxNKNSearch[0]].indices.size();j++)
+      // {
+      //   /*add the indices of the moving clusters in 'cloud' to 'moving_points'*/
+      //   moving_points->indices.push_back(cb->cluster_indices[pointIdxNKNSearch[0]].indices[j]);
+      // }
 
 			if(cb->detection_results[pointIdxNKNSearch[0]] == false || pointNKNSquaredDistance[0]>leave_off_distance)
 			{
@@ -724,8 +748,19 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
 			}
 			else
 			{
-				mo_vec[i].centroid = cb->centroid_collection->points[pointIdxNKNSearch[0]];
+        // Update cb->clusters and cb->centroid_collection using KF
+        Eigen::Matrix<float,1,1> u;
+        u.setZero();
+        mo_vec[i].kf->predict(u);
+        float dx = mo_vec[i].kf->state[0]-mo_vec[i].centroid.x, dy = mo_vec[i].kf->state[1]-mo_vec[i].centroid.y;
+        cb->centroid_collection->points[pointIdxNKNSearch[0]].x += dx;
+        cb->centroid_collection->points[pointIdxNKNSearch[0]].y += dy;
+
+				// mo_vec[i].centroid = cb->centroid_collection->points[pointIdxNKNSearch[0]];
         /*update the moving centroid with the latest centroid of the moving cluster*/
+        mo_vec[i].centroid.x = mo_vec[i].kf->state[0]; 
+        mo_vec[i].centroid.y = mo_vec[i].kf->state[1];
+        mo_vec[i].centroid.z = cb->centroid_collection->points[pointIdxNKNSearch[0]].z;
 
 				mo_vec[i].increaseConfidence(); //increase the moving confidence
 

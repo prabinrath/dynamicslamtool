@@ -1,4 +1,5 @@
 #include "MOR/IncludeAll.h"
+#include "Filters/parametric_filter.h"
 typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, nav_msgs::Odometry> MySyncPolicy; //for message synchronization
 
 //'xyz' -> refers to the variable with name xyz
@@ -89,8 +90,9 @@ struct MovingObjectCentroid
 	int confidence,max_confidence; //moving confidence score
 	float marker_color[3]; // Default is Green
 	int id;
+	boost::shared_ptr<evsts::KalmanFilter<4,1,2>> kf;
 
-	MovingObjectCentroid(pcl::PointXYZ c,int n_good):centroid(c),confidence(n_good+1),max_confidence(n_good+1){} //constructor
+	MovingObjectCentroid(int n_good, const float dt):confidence(n_good+1),max_confidence(n_good+1),kf(new evsts::KalmanFilter<4,1,2>(dt)){} //constructor
 	bool decreaseConfidence(){confidence--;if(confidence==0){return true;}return false;} //returns true when confidence reduces to 0
 	void increaseConfidence(){if(confidence<max_confidence){confidence++;}} //increases confidence till 'max_confidence'
 };
@@ -117,7 +119,7 @@ class MovingObjectRemoval
 	std::deque<std::vector<bool>> res_vec;
 	/*double ended queue to store the frame moving object detection results as a buffer*/
 
-	/*deque is an optimized DS optimized for deletion at both begenning and end. As 'corrs_vec' and
+	/*deque is an optimized DS for deletion at both begenning and end. As 'corrs_vec' and
 	'res_vec' are buffers they are better stored as deques*/
 
 	boost::shared_ptr<MovingObjectDetectionCloud> ca,cb;
@@ -148,13 +150,13 @@ class MovingObjectRemoval
 	void movingCloudObjectSubscriber(const sensor_msgs::PointCloud2ConstPtr& input, const nav_msgs::OdometryConstPtr& odm);
 	/*call back to get incoming data using internal sync*/
 
-	int recurseFindClusterChain(int col,int track);
+	int recurseFindClusterChain(int col,int track, int& prev_ind);
 	/*recursive function to check for moving cluster chain consistency*/
 
 	void checkMovingClusterChain(pcl::CorrespondencesPtr mp,std::vector<bool> &res_ca,std::vector<bool> &res_cb);
 	/*function to confirm the consistency of a moving cluster and add the cluster to the 'mo_vec'*/
 
-	void pushCentroid(pcl::PointXYZ pt);
+	void pushCentroid(const int prev_ind, const int curr_ind);
 	/*function to add the centroid of a new moving cluster to 'mo_vec'*/
 
 	public:
