@@ -34,6 +34,6 @@ pde_distance_threshold:0.1
 opc_normalization_factor:50
 
 #Cluster tracking prameters
-volume_constraint:0.5
+volume_constraint:0.8
 leave_off_distance:9.0
 catch_up_distance:7.0

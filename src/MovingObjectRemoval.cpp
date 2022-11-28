@@ -53,7 +53,43 @@ visualization_msgs::Marker mark_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr clo
   marker.color.b = b;
   marker.color.a = 0.5; //opacity
 
-  marker.lifetime = ros::Duration(1); //persistance duration
+  marker.lifetime = ros::Duration(2); //persistance duration
+  //marker.lifetime = ros::Duration(10);
+  return marker;
+}
+
+visualization_msgs::Marker identify_cluster(pcl::PointXYZ centroid, int id, std::string f_id, std::string ns="identify_box")
+{
+  /*Function to generate id text visualization markers. This function is used when the VISUALIZE
+  flag is defined*/
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = f_id;
+  marker.header.stamp = ros::Time::now();
+  marker.ns = ns;
+  marker.id = id;
+  marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+  marker.action = visualization_msgs::Marker::ADD;
+
+  marker.pose.position.x = centroid.x;
+  marker.pose.position.y = centroid.y;
+  marker.pose.position.z = centroid.z+1;
+  marker.pose.orientation.x = 0.0;
+  marker.pose.orientation.y = 0.0;
+  marker.pose.orientation.z = 0.0;
+  marker.pose.orientation.w = 1.0;
+
+  marker.text = std::to_string(id);
+
+  marker.scale.x = 0.3;
+  marker.scale.y = 0.3;
+  marker.scale.z = 1;
+
+  marker.color.r = 0.0f;
+  marker.color.g = 1.0f;
+  marker.color.b = 0.0f;
+  marker.color.a = 1.0;
+
+  marker.lifetime = ros::Duration(2); //persistance duration
   //marker.lifetime = ros::Duration(10);
   return marker;
 }
@@ -524,8 +560,8 @@ void MovingObjectRemoval::pushCentroid(const int prev_ind, const int curr_ind)
       // Update KF
       Eigen::Matrix<float,2,1> curr_state;
       curr_state << pt.x, pt.y;
-      std::cout<<"GT "<<pt.x<<" "<<pt.y<<"\n";
-      std::cout<<"KF "<<mo_vec[i].centroid.x<<" "<<mo_vec[i].centroid.y<<"\n";
+      // std::cout<<"GT "<<pt.x<<" "<<pt.y<<"\n";
+      // std::cout<<"KF "<<mo_vec[i].centroid.x<<" "<<mo_vec[i].centroid.y<<"\n";
       mo_vec[i].kf->update(curr_state);
       mo_vec[i].centroid.x = mo_vec[i].kf->state[0]; 
       mo_vec[i].centroid.y = mo_vec[i].kf->state[1];
@@ -763,10 +799,12 @@ bool MovingObjectRemoval::filterCloud(pcl::PCLPointCloud2 &out_cloud,std::string
         mo_vec[i].centroid.z = cb->centroid_collection->points[pointIdxNKNSearch[0]].z;
 
 				mo_vec[i].increaseConfidence(); //increase the moving confidence
-
+        
+        // std::cout<<mo_vec[i].id%1000<<":"<<mo_vec[i].kf->state[0]<<","<<mo_vec[i].kf->state[1]<<","<<mo_vec[i].kf->state[2]<<","<<mo_vec[i].kf->state[3]<<"\n";
         #ifdef VISUALIZE //visualize bounding box to show the moving cluster if VISUALIZE flag is defined
         marker_pub.publish(mark_cluster(cb->clusters[pointIdxNKNSearch[0]], mo_vec[i].id, debug_fid, "bounding_box",
           mo_vec[i].marker_color[0], mo_vec[i].marker_color[1], mo_vec[i].marker_color[2]));
+        marker_pub.publish(identify_cluster(cb->centroid_collection->points[pointIdxNKNSearch[0]], mo_vec[i].id%1000, debug_fid, "identify_box"));
         #endif
 			}
 		}
