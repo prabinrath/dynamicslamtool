@@ -1,0 +1,21 @@
+<launch>
+    <arg name="rviz_file" value="$(find dynamic_slam_tool)/rviz/evsts.rviz"/>
+    <arg name="ouster_config" value="/home/prabin/Downloads/EVSTS-Lab/Ouster_Data/2022-05-26-11-17-48_OS-1-64-991923000917-1024x10.json"/>
+    <arg name="bag_file" value="/home/prabin/Downloads/EVSTS-Lab/Ouster_Data/2022-05-26-11-17-48_OS-1-64-991923000917-1024x10.bag"/>
+
+    <!-- start Ouster Driver -->
+    <include file="$(find ouster_ros)/launch/replay_evsts.launch">
+        <arg name="metadata" value="$(arg ouster_config)"/>
+        <!-- <arg name="bag_file" value="$(arg bag_file)"/> -->
+        <arg name="viz" value="false"/>
+    </include>
+
+    <!-- RViz -->
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(arg rviz_file)" />
+
+    <node pkg="evsts" type="vel_est" name="vel_est"/>
+
+    <node pkg="dynamic_slam_tool" type="mov_e" name="mov_e"/>
+
+    <node pkg="rosbag" type="play" name="player" args="-r 0.5 $(arg bag_file)"/>
+</launch>
