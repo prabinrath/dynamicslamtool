@@ -29,14 +29,14 @@ class KalmanFilter: public BayesianFilter<STATE_DIM, CONTROL_DIM, MEASUREMENT_DI
                  0, 1, 0, dt,
                  0, 0, 1, 0,
                  0, 0, 0, 1;
-            P << 0, 0, 0, 0,
-                 0, 0, 0, 0,
+            P << 1000, 0, 0, 0,
+                 0, 1000, 0, 0,
                  0, 0, 1000, 0,
                  0, 0, 0, 1000;
             H << 1, 0, 0, 0,
                  0, 1, 0, 0;
-            R << 0.1, 0,
-                 0, 0.1;
+            R << 0.01, 0,
+                 0, 0.01;
         }
 
         void set_initial_state(const Eigen::Matrix<float,STATE_DIM,1>& s){

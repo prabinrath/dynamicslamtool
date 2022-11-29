@@ -1,0 +1,18 @@
+<launch>
+    <arg name="rviz_file" value="$(find dynamic_slam_tool)/rviz/hesai_lidar.rviz"/>
+    <arg name="bag_file" value="/home/prabin/2022-11-18-19-35-31.bag"/>
+
+    <!-- start Hesai Driver -->
+    <!-- <include file="$(find pandar_pointcloud)/launch/PandarSwift_points.launch">
+        <arg name="pcap" value="/home/prabin/Downloads/EVSTS-Lab/Hesai_Lidar/2022-05-27-19-26-59_Hesai-Lidar-Data.pcap" />
+    </include> -->
+
+    <!-- RViz -->
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(arg rviz_file)" />
+
+    <!-- <node pkg="evsts" type="vel_est" name="vel_est"/> -->
+
+    <!-- <node pkg="dynamic_slam_tool" type="mov_e" name="mov_e"/> -->
+
+    <node pkg="rosbag" type="play" name="player" args="-l -r 0.25 $(arg bag_file)"/>
+</launch>

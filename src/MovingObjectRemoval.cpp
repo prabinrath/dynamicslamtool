@@ -96,6 +96,14 @@ visualization_msgs::Marker identify_cluster(pcl::PointXYZ centroid, int id, std:
 
 ////////////////////////////////////////////////////////////////////////
 
+void MovingObjectDetectionCloud::downSample()
+{
+  pcl::VoxelGrid<pcl::PointXYZI> vg; //voxelgrid filter to downsample input cloud
+  vg.setInputCloud(cloud);
+  vg.setLeafSize(gp_leaf,gp_leaf,gp_leaf);
+  vg.filter(*cloud); //'dsc' stores the downsampled pointcloud
+}
+
 void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
 {
     /*Hard coded ground plane removal*/
@@ -112,64 +120,64 @@ void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y,float z)
     // /*The pointcloud becomes more sparse as the distance of sampling from the lidar increases.
     // So it has been trimmed in X,Y and Z directions*/
 
-    // pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
-    // cropBoxFilter.setInputCloud(raw_cloud);
-    // Eigen::Vector4f min_pt(-x, -y, gp_limit, 1.0f);
-    // Eigen::Vector4f max_pt(x, y, z, 1.0f);
-    // cropBoxFilter.setMin(min_pt);
-    // cropBoxFilter.setMax(max_pt);
-    // //cropBoxFilter.setNegative(true);
-    // cropBoxFilter.filter(*cloud); //'cloud' stores the pointcloud after removing ground plane
+    pcl::CropBox<pcl::PointXYZI> cropBoxFilter (true);
+    cropBoxFilter.setInputCloud(raw_cloud);
+    Eigen::Vector4f min_pt(-x, -y, gp_limit, 1.0f);
+    Eigen::Vector4f max_pt(x, y, z, 1.0f);
+    cropBoxFilter.setMin(min_pt);
+    cropBoxFilter.setMax(max_pt);
+    //cropBoxFilter.setNegative(true);
+    cropBoxFilter.filter(*cloud); //'cloud' stores the pointcloud after removing ground plane
     // gp_indices = cropBoxFilter.getRemovedIndices();
     /*ground plane is removed from 'raw_cloud' and their indices are stored in gp_indices*/
 
     /*RANSAC ground plane removal*/
 
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(raw_cloud);
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(-z, z);
-    pass.filter(*raw_cloud);
-    pass.setInputCloud(raw_cloud);
-    pass.setFilterFieldName("x");
-    pass.setFilterLimits(-x, x);
-    pass.filter(*raw_cloud);
-    pass.setInputCloud(raw_cloud);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(-y, y);
-    pass.filter(*raw_cloud);
+    // pcl::PassThrough<pcl::PointXYZI> pass;
+    // pass.setInputCloud(raw_cloud);
+    // pass.setFilterFieldName("z");
+    // pass.setFilterLimits(-z, z);
+    // pass.filter(*raw_cloud);
+    // pass.setInputCloud(raw_cloud);
+    // pass.setFilterFieldName("x");
+    // pass.setFilterLimits(-x, x);
+    // pass.filter(*raw_cloud);
+    // pass.setInputCloud(raw_cloud);
+    // pass.setFilterFieldName("y");
+    // pass.setFilterLimits(-y, y);
+    // pass.filter(*raw_cloud);
 
-    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
-    pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+    // pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+    // pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
 
-    pcl::SACSegmentation<pcl::PointXYZI> seg;
-    seg.setOptimizeCoefficients(true);
-    seg.setModelType(pcl::SACMODEL_PLANE);
-    seg.setMethodType(pcl::SAC_RANSAC );
-    // Eigen::Vector3f axis = Eigen::Vector3f(0.0,0.0,1.0);
-    // seg.setAxis(axis);
-    // seg.setEpsAngle(  10.0f * (3.14/180.0f) );
-    seg.setMaxIterations(500);
-    seg.setDistanceThreshold(0.5);
+    // pcl::SACSegmentation<pcl::PointXYZI> seg;
+    // seg.setOptimizeCoefficients(true);
+    // seg.setModelType(pcl::SACMODEL_PLANE);
+    // seg.setMethodType(pcl::SAC_RANSAC );
+    // // Eigen::Vector3f axis = Eigen::Vector3f(0.0,0.0,1.0);
+    // // seg.setAxis(axis);
+    // // seg.setEpsAngle(  10.0f * (3.14/180.0f) );
+    // seg.setMaxIterations(500);
+    // seg.setDistanceThreshold(0.5);
 
-    seg.setInputCloud(raw_cloud);
-    seg.segment(*inliers, *coefficients);
+    // seg.setInputCloud(raw_cloud);
+    // seg.segment(*inliers, *coefficients);
     
-    if (inliers->indices.size() == 0)
-    {
-      PCL_ERROR ("Could not estimate a planar model for the given dataset.");
-    }
+    // if (inliers->indices.size() == 0)
+    // {
+    //   PCL_ERROR ("Could not estimate a planar model for the given dataset.");
+    // }
 
-    pcl::PointIndicesPtr ground_plane(new pcl::PointIndices);
-    for (int i = 0; i < inliers->indices.size (); i++)
-    {
-         ground_plane->indices.push_back(inliers->indices[i]);
-    }
-    pcl::ExtractIndices<pcl::PointXYZI> extract;
-    extract.setInputCloud(raw_cloud);
-    extract.setIndices(ground_plane);
-    extract.setNegative(true);
-    extract.filter(*cloud);
+    // pcl::PointIndicesPtr ground_plane(new pcl::PointIndices);
+    // for (int i = 0; i < inliers->indices.size (); i++)
+    // {
+    //      ground_plane->indices.push_back(inliers->indices[i]);
+    // }
+    // pcl::ExtractIndices<pcl::PointXYZI> extract;
+    // extract.setInputCloud(raw_cloud);
+    // extract.setIndices(ground_plane);
+    // extract.setNegative(true);
+    // extract.filter(*cloud);
 }
 
 void MovingObjectDetectionCloud::groundPlaneRemoval(float x,float y)
@@ -325,6 +333,7 @@ void MovingObjectDetectionCloud::computeClusters(float distance_threshold, std::
 	    cloud_cluster->is_dense = true;
 
 	    clusters.push_back(cloud_cluster); //add the cluster to a collection vector
+      // std::cout<<cloud_cluster->points.size()<<" cluster size \n";
 
 	    Eigen::Vector4d temp;
 	    pcl::compute3DCentroid(*cloud_cluster, temp); //compute centroid of the cluster
@@ -575,7 +584,7 @@ void MovingObjectRemoval::pushCentroid(const int prev_ind, const int curr_ind)
 	}
 
   // std::cout<<"Adding Centroid"<<std::endl;
-	MovingObjectCentroid moc(static_confidence, 0.1);
+	MovingObjectCentroid moc(static_confidence, 0.05);
   /*assign static confidence to 'moc' that determines it's persistance in 'mo_vec'*/
 
   // Initialize KF and update it  
@@ -647,6 +656,8 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
   cb->groundPlaneRemoval(trim_x,trim_y,trim_z); //ground plane removal
   //cb->groundPlaneRemoval(trim_x,trim_y); //groud plane removal (voxel covariance)
 
+  cb->downSample();
+
   // cb->cloud = cb->raw_cloud; // Only when Ground Plane Removal is disabled 
   cb->computeClusters(ec_distance_threshold,"single_cluster"); 
   /*compute clusters within the latest pointcloud*/
@@ -673,7 +684,7 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 	// }
 
   #ifdef VISUALIZE //visualize the cluster collection if VISUALIZE flag is defined
-	pcl::toPCLPointCloud2(*cb->cloud,in_cloud);
+	pcl::toPCLPointCloud2(*cb->cluster_collection,in_cloud);
 	pcl_conversions::fromPCL(in_cloud, output);
 	output.header.frame_id = debug_fid;
   output.header.stamp = ros::Time::now();
@@ -710,9 +721,10 @@ void MovingObjectRemoval::pushRawCloudAndPose(pcl::PCLPointCloud2 &in_cloud,geom
 		}
     else if(method_choice==2)
     {
-      threshold = (ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/opc_normalization_factor;
+      threshold = (double)(ca->clusters[(*mp)[j].index_query]->points.size()+cb->clusters[(*mp)[j].index_match]->points.size())/opc_normalization_factor;
     }
 
+    // std::cout<<param_vec[j]<<" "<<threshold<<"\n";
 		if(param_vec[j]>threshold)
 		{
 			//ca->detection_results[(*mp)[j].index_query] = true;

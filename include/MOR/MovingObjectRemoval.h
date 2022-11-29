@@ -54,6 +54,7 @@ struct MovingObjectDetectionCloud
 	void groundPlaneRemoval(float,float,float); //ground plane removal with predefined dimensions
 	void groundPlaneRemoval(float,float); //ground plane removal using voxel covariance and binning
 	void computeClusters(float,std::string); //computes the euclidian clustering with an input distance threshold
+	void downSample(); // down sample the cloud
 };
 
 class MovingObjectDetectionMethods

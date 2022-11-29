@@ -8,15 +8,15 @@ marker_topic:/bbox
 input_pointcloud_topic:evsts/data
 input_odometry_topic:/camera/odom/sample
 output_fid:/filtered
-debug_fid:os_lidar
+debug_fid:PandarSwift
 
 #Clustering parameters
 ec_distance_threshold:1.0
 min_cluster_size:10
-max_cluster_size:500
+max_cluster_size:1500
 
 #Ground plane removal voxel covariance
-gp_leaf:0.1
+gp_leaf:0.2
 bin_gap:10
 
 #Ground plane removal hard coded
@@ -35,5 +35,5 @@ opc_normalization_factor:50
 
 #Cluster tracking prameters
 volume_constraint:0.8
-leave_off_distance:9.0
-catch_up_distance:7.0
+leave_off_distance:7.0
+catch_up_distance:5.0
